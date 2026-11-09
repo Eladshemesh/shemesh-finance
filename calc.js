@@ -232,6 +232,65 @@
     return { market20: -20 * beta, rates1: rate, usd10: -10 };
   }
 
-  root.ShemeshCalc = { derive: derive, cagr: cagr, mean: mean, pillars: pillars, reverseDCF: reverseDCF, peHistory: peHistory, sizing: sizing, stress: stress };
+
+  // ---------- legendary-investor lenses (their published principles applied to our data) ----------
+  function lenses(s, d, ctx) {
+    ctx = ctx || {};
+    var st = s.stats || {}, ms = s.morningstar || {}, moat = ms.moat, unc = ms.uncertainty;
+    var roic = st.roic != null ? st.roic : st.roe, peg = st.peg, pe = d.pe, fpe = d.fpe;
+    var g = s.epsGrowthNext != null ? s.epsGrowthNext : s.revenueGrowthNext;
+    var netCash = d.netDebt != null && d.netDebt <= 0, de = st.debtEbitda;
+    var below = s.price <= d.fair, deepBelow = s.price <= d.entry;
+    var c = s.consensus || {}, br = c.breakdown || {}, nAn = c.analysts || 0;
+    var buys = (br.strongBuy || 0) + (br.buy || 0), buyPct = nAn ? buys / nAn * 100 : null;
+    var peH = ctx.peHist, out = d.outlook || [], y1 = out[2] || null;
+    function pct0(x) { return Math.round(x) + "%"; }
+    var L = [];
+    // Buffett: durable moat, high returns on capital, little debt, predictable, margin of safety
+    var bScore = (moat === "Wide" ? 2 : moat === "Narrow" ? 1 : 0) + (roic >= 15 ? 1 : 0) + ((netCash || (de != null && de < 2)) ? 1 : 0) + (below ? 1 : 0) + ((unc === "Low" || unc === "Medium") ? 1 : 0);
+    L.push({ id: "buffett", name: "וורן באפט", ini: "ו״ב", v: bScore >= 5 && unc !== "High" && unc !== "Very High" ? "g" : bScore >= 3 ? "y" : "r",
+      line: bScore >= 5 && unc !== "High" && unc !== "Very High" ? "עסק עם יתרון מתמשך, תשואה גבוהה על ההון ומחיר עם מרווח ביטחון." : (unc === "High" || unc === "Very High") && bScore >= 3 ? "יש כאן איכות, אבל קשה לחזות איך ייראה העסק בעוד עשור." : bScore >= 3 ? "עסק טוב, אבל לא כל התנאים שלו מתקיימים – בעיקר המחיר או היציבות." : "חסר חפיר מוכח, תשואה גבוהה על ההון או מרווח ביטחון.",
+      rule: "לקנות עסק מצוין שמבינים, עם יתרון תחרותי מתמשך (״חפיר״), הנהלה טובה, ובמחיר עם מרווח ביטחון.",
+      facts: ["חפיר: " + (moat === "Wide" ? "רחב" : moat === "Narrow" ? "צר" : "אין / לא מדורג"), roic != null ? "תשואה על ההון " + pct0(roic) : null, netCash ? "מזומן נטו" : de != null ? "חוב/EBITDA " + de.toFixed(1) : null, below ? "מתחת לשווי ההוגן" : "מעל לשווי ההוגן", unc ? "אי־ודאות: " + ({ Low: "נמוכה", Medium: "בינונית", High: "גבוהה", "Very High": "גבוהה מאוד" })[unc] : null].filter(Boolean).join(" · ") });
+    // Munger: wonderful business at a fair price
+    var great = (roic >= 20) && (moat === "Wide" || moat === "Narrow"), fair = fpe != null ? fpe <= 30 : (pe != null && pe <= 35);
+    L.push({ id: "munger", name: "צ׳ארלי מאנגר", ini: "צ״מ", v: great && fair ? "g" : great || (roic >= 15 && fair) ? "y" : "r",
+      line: great && fair ? "עסק נהדר במחיר הוגן – בדיוק מה שהוא חיפש." : great ? "עסק נהדר, אבל המחיר כבר לא הוגן." : roic >= 15 && fair ? "עסק טוב במחיר סביר, אבל לא ״נהדר״." : "לא עסק נהדר לפי התשואה על ההון והחפיר.",
+      rule: "עדיף לקנות עסק נהדר במחיר הוגן מאשר עסק בינוני במחיר מציאה.",
+      facts: [roic != null ? "תשואה על ההון " + pct0(roic) : null, pe != null ? "מכפיל " + pe.toFixed(0) : null, fpe != null ? "מכפיל עתידי " + fpe.toFixed(0) : null].filter(Boolean).join(" · ") });
+    // Lynch: PEG and company category
+    var cat = g == null ? "לא ידוע" : g >= 20 ? "״צומחת מהירה״" : g >= 8 ? "״יציבה וצומחת״" : g >= 0 ? "״צומחת לאט״" : "״במשבר / מפנה״";
+    L.push({ id: "lynch", name: "פיטר לינץ׳", ini: "פ״ל", v: peg == null ? "n" : peg <= 1 ? "g" : peg <= 1.8 ? "y" : "r",
+      line: peg == null ? "אין מספיק נתוני צמיחה כדי לחשב PEG." : peg <= 1 ? cat + " שנסחרת בזול ביחס לצמיחה שלה." : peg <= 1.8 ? cat + " במחיר הוגן ביחס לצמיחה." : cat + " שנסחרת ביוקר ביחס לצמיחה.",
+      rule: "מכפיל רווח נמוך מקצב הצמיחה (PEG מתחת ל־1) הוא סימן למציאה. וחשוב להבין לאיזו קטגוריה החברה שייכת.",
+      facts: [peg != null ? "PEG " + peg.toFixed(2) : null, g != null ? "צמיחה צפויה " + pct0(g) : null, "קטגוריה: " + cat].filter(Boolean).join(" · ") });
+    // Marks: second-level thinking, crowd sentiment and price vs history
+    var crowd = buyPct != null && buyPct >= 85, cheapVsHist = peH && peH.vs <= -15, richVsHist = peH && peH.vs >= 25;
+    L.push({ id: "marks", name: "הווארד מרקס", ini: "ה״מ", v: richVsHist && crowd ? "r" : crowd || richVsHist ? "y" : cheapVsHist ? "g" : "y",
+      line: crowd && cheapVsHist ? "כמעט כולם אופטימיים – זה מחייב זהירות, גם אם המכפיל נמוך מהרגיל." : crowd ? "כמעט כל וול סטריט אופטימי – וזה הזמן להיזהר." : richVsHist ? "המכפיל גבוה בהרבה מהרגיל שלה – השוק כבר מתמחר הרבה." : cheapVsHist ? "המכפיל נמוך מהרגיל שלה והקהל לא נלהב – כאן נמצאות הזדמנויות." : "אין קיצון בסנטימנט או במחיר.",
+      rule: "לחשוב צעד אחד יותר מהקהל: כשכולם מסכימים, הסיכון גבוה מכפי שנראה; כשכולם מפחדים – שם נמצאות ההזדמנויות.",
+      facts: [buyPct != null ? buys + " מתוך " + nAn + " אנליסטים ממליצים לקנות" : null, peH ? "המכפיל " + (peH.vs >= 0 ? "גבוה" : "נמוך") + " ב־" + Math.abs(Math.round(peH.vs)) + "% מהרגיל שלה" : null, ctx.vix != null ? "מדד הפחד " + ctx.vix.toFixed(1) : null].filter(Boolean).join(" · ") });
+    // Pabrai: heads I win, tails I don't lose much
+    var down = y1 ? (y1.bear / s.price - 1) * 100 : null, up = y1 ? (y1.bull / s.price - 1) * 100 : null;
+    var asym = down != null && up != null ? up / Math.max(5, -down) : null;
+    L.push({ id: "pabrai", name: "מוניש פבראי", ini: "מ״פ", v: asym == null ? "n" : (asym >= 3 && (netCash || (de != null && de < 2))) ? "g" : asym >= 1.5 ? "y" : "r",
+      line: asym == null ? "אין מספיק נתונים לתרחישים." : asym >= 3 ? "הנפילה האפשרית קטנה ביחס לפוטנציאל." : asym >= 1.5 ? "הפוטנציאל גדול מהסיכון, אבל לא בהפרש גדול." : "הסיכון לירידה דומה לפוטנציאל לעלייה – לא ההימור שהוא מחפש.",
+      rule: "״ראש – אני מנצח, זנב – אני לא מפסיד הרבה״: לחפש השקעות עם צד שלילי קטן וצד חיובי גדול.",
+      facts: [y1 ? "תרחיש פסימי לשנה " + Math.round(down) + "% · אופטימי +" + Math.round(up) + "%" : null, netCash ? "מזומן נטו" : null].filter(Boolean).join(" · ") });
+    var tally = { g: 0, y: 0, r: 0, n: 0 }; L.forEach(function (x) { tally[x.v]++; });
+    return { list: L, tally: tally };
+  }
+
+  // ---------- one plain-language sentence for a stock ----------
+  function verdictLine(P) {
+    var m = {}; P.forEach(function (p) { m[p.key] = p.light; });
+    var q = { g: "עסק חזק", y: "עסק סביר", r: "עסק חלש", n: "עסק" }[m.quality || "n"];
+    var g = { g: " שצומח מהר", y: " שצומח בקצב מתון", r: " שכמעט לא צומח", n: "" }[m.growth || "n"];
+    var v = { g: ", והמחיר מתחת לשווי ההוגן", y: ", והמחיר בערך הוגן", r: ", אבל המחיר יקר", n: "" }[m.valuation || "n"];
+    var r = { g: ". סיכון נמוך יחסית.", y: ". סיכון בינוני.", r: ". אבל הסיכון גבוה – מתאימה רק לחלק קטן מהתיק.", n: "." }[m.risk || "n"];
+    return { text: q + g + v + r, risky: m.risk === "r" };
+  }
+
+  root.ShemeshCalc = { derive: derive, cagr: cagr, mean: mean, pillars: pillars, reverseDCF: reverseDCF, peHistory: peHistory, sizing: sizing, stress: stress, lenses: lenses, verdictLine: verdictLine };
   if (typeof module !== "undefined") module.exports = root.ShemeshCalc;
 })(typeof window !== "undefined" ? window : globalThis);

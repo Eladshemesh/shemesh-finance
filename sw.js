@@ -1,6 +1,6 @@
 // Offline support: data.json is network-first (always fresh when online),
 // everything else (page, scripts, fonts, icons) is cache-first.
-const CACHE = "shemesh-2026-11-09";
+const CACHE = "shemesh-2026-11-09-r4";
 const CORE = ["./", "index.html", "app.js", "calc.js", "data.json", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", (e) => {
@@ -17,7 +17,7 @@ self.addEventListener("fetch", (e) => {
   const req = e.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
-  const fresh = url.pathname.endsWith("data.json") || url.pathname.endsWith("universe.json") || url.pathname.endsWith("app.js") || url.pathname.endsWith("calc.js") || req.mode === "navigate";
+  const fresh = url.pathname.endsWith("data.json") || url.pathname.endsWith("universe.json") || url.pathname.endsWith("extras.json") || url.pathname.endsWith("app.js") || url.pathname.endsWith("calc.js") || req.mode === "navigate";
   if (fresh) {
     e.respondWith(
       fetch(req).then((res) => { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); return res; })

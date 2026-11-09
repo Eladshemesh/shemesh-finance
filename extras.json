@@ -1,0 +1,30 @@
+{
+ "asOf": "2026-11-09",
+ "analysts": {
+  "shannon": {"name": "ריצ׳רד שאנון", "firm": "Craig-Hallum", "focus": "שבבים וטכנולוגיה", "profile": "https://www.tipranks.com/analysts/richard-shannon"},
+  "prisco": {"name": "מת׳יו פריסקו", "firm": "Cantor Fitzgerald", "focus": "שבבים וציוד לייצור שבבים", "profile": "https://www.tipranks.com/analysts/matthew-prisco"},
+  "cassidy": {"name": "ג׳ררד קסידי", "firm": "RBC Capital Markets", "focus": "בנקים", "profile": "https://stockanalysis.com/analysts/gerard-cassidy/"},
+  "slutsky": {"name": "סם סלוצקי", "firm": "LifeSci Capital", "focus": "ביוטכנולוגיה", "profile": "https://www.tipranks.com/experts/analysts/sam-slutsky"}
+ },
+ "coverage": {
+  "NVDA": [{"a": "shannon", "rating": "Buy", "he": "קנייה", "target": 245, "date": "2025-08-28", "src": "https://www.benzinga.com/analyst-stock-ratings/analyst/5975f4d735f48b0001d47efe/richard-shannon"}],
+  "AVGO": [{"a": "prisco", "rating": "Overweight", "he": "משקל יתר (קנייה)", "target": 300, "date": "2025-06-06", "src": "https://www.benzinga.com/stock/AVGO/ratings"}],
+  "JPM": [{"a": "cassidy", "rating": "Outperform", "he": "תשואת יתר (קנייה)", "target": 370, "date": "2026-07-15", "dateLabel": "יולי 2026", "src": "https://www.stockhub.kr/en/news/news_51256503284d"}]
+ },
+ "spiva": {
+  "asOf": "סוף 2025",
+  "rows": [["שנה אחת (2025)", 79], ["10 שנים", 85.59], ["15 שנים", 89.93], ["20 שנים", 92.89]],
+  "src": "https://www.spglobal.com/spdji/en/spiva/article/spiva-us-year-end-2025/",
+  "src2": "https://dev5.ngpf.org/blog/question-of-the-day/question-of-the-day-over-a-recent-20-year-period-what-percent-of-pros-investing-in-large-companies-beat-the-market/"
+ },
+ "crashes": [
+  {"name": "המשבר הפיננסי", "peak": "אוקטובר 2007", "bottom": "מרץ 2009", "drop": -57, "recovery": "כ־5.5 שנים לחזור לשיא (מרץ 2013)", "lesson": "מי שמכר בתחתית ב־2009 נעל הפסד של יותר ממחצית. מי שהמשיך להחזיק – ולהשקיע כל חודש – יצא ברווח גדול בעשור שאחרי."},
+  {"name": "הקורונה", "peak": "פברואר 2020", "bottom": "מרץ 2020", "drop": -34, "recovery": "כ־5 חודשים לחזור לשיא (אוגוסט 2020)", "lesson": "הנפילה המהירה בהיסטוריה – וגם אחת ההתאוששויות המהירות. מי שנבהל ומכר במרץ פספס את כל העלייה."},
+  {"name": "הריבית והאינפלציה", "peak": "ינואר 2022", "bottom": "אוקטובר 2022", "drop": -25, "recovery": "כשנתיים לחזור לשיא (ינואר 2024)", "lesson": "ירידה איטית ומתישה של כמעט שנה. מניות צמיחה יקרות ירדו הרבה יותר מהמדד – כאן רואים למה פיזור ומחיר כניסה חשובים."}
+ ],
+ "learnMore": [
+  {"name": "מיכה סטוקס – ערוץ היוטיוב", "url": "https://www.youtube.com/@Micha.Stocks", "note": "סרטון יומי בעברית על וול סטריט ושוק ההון, בלי טיפים ובלי ייעוץ."},
+  {"name": "מיכה סטוקס מגיש – הפודקאסט", "url": "https://podcasts.apple.com/us/podcast/%D7%9E%D7%99%D7%9B%D7%94-%D7%A1%D7%98%D7%95%D7%A7%D7%A1-%D7%9E%D7%92%D7%99%D7%A9-%D7%A9%D7%95%D7%A7-%D7%94%D7%94%D7%95%D7%9F-%D7%91%D7%95%D7%A8%D7%A1%D7%94-%D7%95%D7%95%D7%9C-%D7%A1%D7%98%D7%A8%D7%99%D7%98-%D7%94%D7%A9%D7%A7%D7%A2%D7%95%D7%AA-%D7%9E%D7%A1%D7%97%D7%A8/id1707589009", "note": "פרקים שבועיים: חדשות השוק, ניתוחים והשקעות לטווח ארוך."},
+  {"name": "SPIVA – האם מנהלים מנצחים את המדד?", "url": "https://www.spglobal.com/spdji/en/spiva/article/spiva-us-year-end-2025/", "note": "הדוח של S&P שמשווה קרנות מנוהלות למדדים (אנגלית)."}
+ ]
+}

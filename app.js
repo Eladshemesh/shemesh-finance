@@ -124,7 +124,7 @@
           </div>
         </div>
       </div>
-      <div className="meta-line"><span><span className="dot"></span>עדכון אחרון: <b>${updTxt}</b></span><span>${D.pricesAsOf}</span><span>עדכון אוטומטי בבוקר שאחרי כל יום מסחר (ג׳–שבת, ~10:00)</span></div>
+      ${props.compact ? null : html`<div className="meta-line"><span><span className="dot"></span>עדכון אחרון: <b>${updTxt}</b></span><span>${D.pricesAsOf}</span><span>עדכון אוטומטי בבוקר שאחרי כל יום מסחר (ג׳–שבת, ~10:00)</span></div>`}
       <div className="search">
         <form onSubmit=${submit} role="search">
           <label htmlFor="q" style=${{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>חיפוש מניה</label>
@@ -133,7 +133,7 @@
         </form>
         ${open && q.trim() ? html`<div className="sugg">${sugg.slice(0, 8).map(function (it) { return html`<button key=${it.key} type="button" onMouseDown=${function () { go(it.key); }}><span>${it.label}</span><span className="mono muted">${it.sub}</span></button>`; })}<button type="button" onMouseDown=${function () { setOpen(false); props.onUnknown(q.trim()); setQ(""); }}><span>נתח את "${q.trim()}" – כל מניה או חברה בעולם</span><span className="muted">AI ↗</span></button></div>` : null}
       </div>
-      <div className="strip">
+      ${props.compact ? null : html`<div className="strip">
         ${list.map(function (s) {
           var d = C.derive(s);
           return html`<button key=${s.ticker} className=${"tick" + (s.ticker === props.cur ? " on" : "")} onClick=${function () { go(s.ticker); }} aria-pressed=${s.ticker === props.cur}>
@@ -142,7 +142,7 @@
             <div className="row" style=${{ fontSize: 12 }}><span className="muted">פוטנציאל לשנה</span>${N(pct(d.upside * 100, 1, true), cls(d.upside))}</div>
           </button>`;
         })}
-      </div>
+      </div>`}
     </header>`;
   }
 
@@ -207,11 +207,11 @@
             <span className="pill" style=${{ color: "#8BB6FF" }}>ציון ${d.score}/100</span>
             <span className=${"pill " + (d.upside >= 0 ? "c-b" : "c-s")}>פוטנציאל ${N(pct(d.upside * 100, 1, true))}</span>
           </div>
-          <div className="jump">
+          ${props.noJump ? null : html`<div className="jump">
             ${[["sec-decision", "כרטיס החלטה"], ["sec-history", "גרף מחיר"], ["sec-verdict", "פסק דין"], ["sec-outlook", "תחזית"], ["sec-fin", "דוחות"], ["sec-analysts", "אנליסטים"], ["sec-compare", "השוואה"], ["sec-learn", "לימוד"], ["sec-sources", "מקורות"]].map(function (x) {
               return html`<button key=${x[0]} onClick=${function () { var el = document.getElementById(x[0]); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }}>${x[1]}</button>`;
             })}
-          </div>
+          </div>`}
         </div>
         <div className="kpis">
           ${k.map(function (x, i) { return html`<div className="kpi" key=${i}><div className="l">${x.l}</div><div className=${"v " + (x.c || "")}>${typeof x.v === "string" ? N(x.v) : x.v}</div><div className="s">${x.sl ? html`${x.s} ${x.sl}` : x.s}</div></div>`; })}
@@ -1270,11 +1270,11 @@
   function MyArea(props) {
     var tab = props.tab, setTab = props.setTab;
     var nW = props.watch.length, nP = Object.keys(props.port.reduce(function (a, p) { a[p.t] = 1; return a; }, {})).length;
-    var T = [["watch", "רשימת מעקב" + (nW ? " (" + nW + ")" : "")], ["port", "התיק שלי" + (nP ? " (" + nP + ")" : "")], ["journal", "יומן השקעה"], ["events", "לוח אירועים"]];
+    var T = [["watch", "רשימת מעקב" + (nW ? " (" + nW + ")" : "")], ["port", "התיק שלי" + (nP ? " (" + nP + ")" : "")], ["paper", "התיק הניסיוני"], ["journal", "יומן השקעה"], ["events", "לוח אירועים"]];
     return html`<section className="card" id="sec-my">
       <div className="sec-h"><div><div className="kicker">האזור שלי</div><h2>מעקב, תיק ואירועים</h2></div>
         <div className="seg" role="tablist">${T.map(function (x) { return html`<button key=${x[0]} role="tab" aria-selected=${tab === x[0]} className=${tab === x[0] ? "on" : ""} onClick=${function () { setTab(x[0]); }}>${x[1]}</button>`; })}</div></div>
-      ${e(tab === "watch" ? Watchlist : tab === "port" ? Portfolio : tab === "journal" ? Journal : Events, props)}
+      ${e(tab === "watch" ? Watchlist : tab === "port" ? Portfolio : tab === "paper" ? PaperPortfolio : tab === "journal" ? Journal : Events, props)}
     </section>`;
   }
 
@@ -1612,6 +1612,466 @@
     </nav>`;
   }
 
+  // ================= round 4: new navigation, stock layers, legends, paper portfolio, learning =================
+  var GLOSS = {
+    stock: ["מניה", "חלק קטן בבעלות על חברה. כשהחברה מרוויחה וגדלה – המניה שווה יותר, וחלק מהרווח יכול לחזור אליך כדיבידנד."],
+    index: ["מדד", "סל של הרבה מניות שמייצג שוק שלם. ה־S&P 500, למשל, כולל את 500 החברות הגדולות בארה״ב."],
+    pe: ["מכפיל רווח (P/E)", "כמה שנים של רווח משלמים על המניה: מחיר המניה חלקי הרווח למניה. מכפיל 20 = משלמים פי 20 מהרווח השנתי."],
+    peg: ["PEG", "מכפיל הרווח חלקי קצב הצמיחה. מתחת ל־1 נחשב זול ביחס לצמיחה (שיטה של פיטר לינץ׳)."],
+    fair: ["שווי הוגן", "הערכה של כמה המניה ״באמת״ שווה. אצלנו: ממוצע של קונצנזוס האנליסטים, Morningstar ו־4 בנקים גדולים."],
+    mos: ["מרווח ביטחון", "הנחה שדורשים מהשווי ההוגן, כדי שגם אם טעינו בהערכה – לא נשלם יותר מדי. ככל שהמניה מסוכנת יותר, המרווח גדול יותר."],
+    entry: ["מחיר כניסה", "השווי ההוגן פחות מרווח הביטחון. מתחת למחיר הזה, המודל רואה במניה הזדמנות."],
+    roic: ["תשואה על ההון (ROIC)", "כמה רווח החברה מייצרת מכל דולר שהושקע בה. מעל 15% נחשב עסק איכותי."],
+    moat: ["חפיר", "יתרון שקשה למתחרים להעתיק – מותג, טכנולוגיה, רשת לקוחות. מונח של וורן באפט."],
+    beta: ["בטא", "כמה המניה זזה ביחס לשוק. בטא 2 = כשהשוק זז 1%, המניה זזה בממוצע 2%."],
+    div: ["דיבידנד", "חלק מהרווח שהחברה מחלקת לבעלי המניות במזומן, בדרך כלל כל רבעון."],
+    etf: ["קרן מחקה (ETF)", "קרן שקונה בבת אחת את כל המניות במדד. דמי ניהול נמוכים ופיזור מיידי."],
+    vix: ["מדד הפחד (VIX)", "כמה תנודתיות השוק מצפה בחודש הקרוב. מתחת ל־20 רגוע, מעל 30 פאניקה."],
+    fcf: ["תזרים חופשי", "המזומן שנשאר לחברה אחרי כל ההוצאות וההשקעות. ממנו משלמים דיבידנדים וקונים מניות בחזרה."],
+    spread: ["פיזור", "לא לשים את כל הביצים בסל אחד: כמה מניות, מכמה תחומים, כך שנפילה של אחת לא מפילה את כל התיק."],
+    compound: ["ריבית דריבית", "רווח על רווח: התשואה של השנה מצטרפת לקרן, ובשנה הבאה מרוויחים גם עליה. ככל שהזמן ארוך יותר – האפקט חזק יותר."],
+    fee: ["דמי ניהול", "עמלה שנתית שגובה הקרן או הבנק מכל הסכום. 1% בשנה נשמע מעט, אבל על פני 30 שנה זה יכול להיות חמישית מהכסף."],
+    cgt: ["מס רווחי הון", "בישראל משלמים 25% מהרווח הריאלי כשמוכרים מניה ברווח. כל עוד לא מכרת – לא משלמים."]
+  };
+  function Term(props) {
+    var _o = useState(false), open = _o[0], setOpen = _o[1];
+    var g = GLOSS[props.k], kids = props.children; if (Array.isArray(kids) && !kids.length) kids = null; if (!g) return kids || null;
+    return html`<span className="term"><button className="term-b" aria-expanded=${open} onClick=${function () { setOpen(!open); }}>${kids || g[0]}</button>${open ? html`<span className="term-pop" role="note"><b>${g[0]}:</b> ${g[1]}</span>` : null}</span>`;
+  }
+
+  // ---------- main navigation ----------
+  var NAV = [["home", "בית", "M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"], ["stock", "מניות", "M3 17l6-6 4 4 8-8M15 7h6v6"], ["mine", "שלי", "M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z"], ["discover", "גלה", "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM21 21l-5-5"], ["learn", "למד", "M4 5a2 2 0 0 1 2-2h14v16H6a2 2 0 0 0-2 2zM4 19V5"]];
+  function NavBar(props) {
+    return html`<nav className="mainnav" aria-label="ניווט ראשי">${NAV.map(function (n) {
+      var on = props.screen === n[0];
+      return html`<button key=${n[0]} aria-current=${on ? "page" : "false"} className=${on ? "on" : ""} onClick=${function () { props.go(n[0]); }}>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d=${n[2]}/></svg>
+        <span>${n[1]}</span>${n[0] === "mine" && props.alerts ? html`<b className="badge">${props.alerts}</b>` : null}</button>`;
+    })}</nav>`;
+  }
+  function TopTools(props) {
+    return html`<div className="toptools">
+      <${ModeSwitch} mode=${props.mode} setMode=${props.setMode}/>
+      <button className="chipbtn big" aria-pressed=${props.big} onClick=${function () { props.setBig(!props.big); }}>${props.big ? "א− טקסט רגיל" : "א+ הגדלת טקסט"}</button>
+    </div>`;
+  }
+
+  // ---------- stock: top layer ----------
+  function StockSummary(props) {
+    var s = props.s, d = props.d, P = props.P, V = C.verdictLine(P);
+    var WORD = { quality: ["חזק", "סביר", "חלש"], growth: ["מהר", "מתון", "לא"], health: ["חזק", "סביר", "חלש"], valuation: ["כן", "בערך", "יקר"], sentiment: ["חיובי", "מעורב", "שלילי"], risk: ["נמוך", "בינוני", "גבוה"] };
+    var Q = { quality: "עסק טוב?", growth: "צומח?", health: "בריא פיננסית?", valuation: "מחיר הגיוני?", sentiment: "מה השוק חושב?", risk: "כמה מסוכן?" };
+    var below = s.price <= d.entry;
+    return html`<section className="card sum" aria-labelledby="sum-h">
+      <div className="sum-top">
+        <div><h2 id="sum-h" className="sum-name">${s.nameHe}</h2><div className="muted">${s.ticker} · ${s.sector}</div></div>
+        <div className="sum-px"><div className="v">${N(usd(s.price))}</div><div className="muted" style=${{ fontSize: 12.5 }}>סגירה ${dt(s.priceDate)}</div></div>
+      </div>
+      <p className="sum-line">${V.text}</p>
+      <div className="sum-pills"><span className=${"pill " + d.rec.cls}>${d.rec.he}</span><span className="pill">ציון ${d.score}/100</span></div>
+      <div className="sum-grid">
+        <div className="six">${P.map(function (p) {
+          var i = p.light === "g" ? 0 : p.light === "y" ? 1 : 2;
+          return html`<div key=${p.key} className="six-r"><span className="light" style=${{ background: LIGHT[p.light][1] }} aria-hidden="true"></span><span className="q">${Q[p.key] || p.q}</span><b style=${{ color: LIGHT[p.light][1] }}>${p.light === "n" ? "אין נתון" : WORD[p.key] ? WORD[p.key][i] : LIGHT[p.light][0]}</b></div>`;
+        })}<button className="lnk" style=${{ fontSize: 13, marginTop: 6 }} onClick=${props.onMore}>ההסבר והמספרים של כל שאלה ←</button></div>
+        <div className="entry-box">
+          <div className="eb-row"><span><${Term} k="entry"/></span><b className="v">${N(usd(d.entry, 0))}</b></div>
+          <p>${below ? html`המחיר היום <b className="up">מתחת למחיר הכניסה</b>.` : html`המחיר היום גבוה ב־${N(pct((s.price / d.entry - 1) * 100, 0))} ממחיר הכניסה.`} מחיר הכניסה = <${Term} k="fair"/> (${usd(d.fair, 0)}) פחות <${Term} k="mos"/> של ${Math.round(d.mos * 100)}%.</p>
+        </div>
+      </div>
+    </section>`;
+  }
+  var STABS = [["sum", "סיכום"], ["legends", "הגדולים"], ["chart", "גרף"], ["fin", "כספים"], ["analysts", "אנליסטים"], ["tools", "כלים"]];
+  function StockTabs(props) {
+    return html`<nav className="stabs" aria-label="חלקי הניתוח">${STABS.map(function (t) { var on = props.tab === t[0]; return html`<button key=${t[0]} aria-current=${on ? "page" : "false"} className=${on ? "on" : ""} onClick=${function () { props.setTab(t[0]); }}>${t[1]}</button>`; })}</nav>`;
+  }
+
+  // ---------- legends & featured analysts ----------
+  function Legends(props) {
+    var s = props.s, d = props.d, data = props.data;
+    var vix = ((data.markets && data.markets.items) || []).find(function (x) { return x.k === "vix"; });
+    var Lr = C.lenses(s, d, { peHist: C.peHistory(s, d, data.history), vix: vix ? vix.value : null });
+    var T = Lr.tally, V = C.verdictLine(C.pillars(s, d, props.mkt1y));
+    var head = T.g >= 4 ? "רוב העדשות של המשקיעים הגדולים רואות כאן הזדמנות." : T.g >= 3 ? "רוב העדשות חיוביות, עם הסתייגויות." : T.r >= 3 ? "רוב העדשות מסתייגות מהמניה הזו." : "התמונה מעורבת – יש נקודות חזקות וחלשות.";
+    var cav = Lr.list.filter(function (x) { return x.v === "y" || x.v === "r"; }).map(function (x) { return x.name + ": " + x.line; });
+    var VC = { g: ["בעד", "var(--green)"], y: ["בזהירות", "var(--amber)"], r: ["נגד", "var(--red)"], n: ["אין נתון", "var(--muted)"] };
+    return html`<section className="card" aria-labelledby="lg-h">
+      <div className="ours">
+        <div className="kicker" style=${{ color: "var(--gold)" }}>חוות הדעת שלנו</div>
+        <p style=${{ margin: "6px 0", fontSize: 16.5, lineHeight: 1.55 }}>${head} ${V.text}${cav.length ? " ההסתייגות העיקרית – " + cav[0].replace(/^[^:]+: /, "") : ""}</p>
+        <div style=${{ display: "flex", gap: 6, flexWrap: "wrap" }}><span className="pill c-sb">${T.g} בעד</span><span className="pill c-h">${T.y} בזהירות</span><span className="pill c-s">${T.r} נגד</span></div>
+      </div>
+      <h2 id="lg-h" style=${{ margin: "18px 0 4px" }}>מה היו אומרים המשקיעים הגדולים?</h2>
+      <p className="muted" style=${{ marginTop: 0, fontSize: 13.5 }}>בדיקה של המניה לפי העקרונות שכל אחד מהם פרסם בספרים ובמכתבים. זה לא ציטוט, ולא דעה שלהם על המניה הזו.</p>
+      <div className="lenses">${Lr.list.map(function (l) {
+        return html`<details key=${l.id} className="lens"><summary>
+          <span className="ini" aria-hidden="true">${l.ini}</span>
+          <span className="lt"><b>${l.name}</b><span>${l.line}</span></span>
+          <b style=${{ color: VC[l.v][1], whiteSpace: "nowrap" }}>${VC[l.v][0]}</b></summary>
+          <div className="lens-b"><b>העיקרון:</b> ${l.rule}<br/><b>הנתונים:</b> ${l.facts || "—"}</div></details>`;
+      })}</div>
+      <${FeaturedAnalysts} t=${s.ticker} extras=${props.extras}/>
+      <p className="method">העדשות מחושבות אוטומטית מהנתונים של המניה (חפיר ואי־ודאות מ־Morningstar, תשואה על ההון, PEG, מכפילים, חוב, סנטימנט האנליסטים ותרחישי המחיר). זה כלי לימוד שמראה איך כל גישה חושבת – לא המלצה ולא ציטוט.</p>
+    </section>`;
+  }
+  function FeaturedAnalysts(props) {
+    var X = props.extras; if (!X) return null;
+    var rows = (X.coverage && X.coverage[props.t]) || [];
+    var all = Object.keys(X.analysts || {}).map(function (k) { return X.analysts[k]; });
+    return html`<div style=${{ marginTop: 18 }}>
+      <h3 style=${{ margin: "0 0 6px" }}>אנליסטים מובילים שמכסים את המניה</h3>
+      ${rows.length ? rows.map(function (r, i) {
+        var A = X.analysts[r.a] || {}, old = daysTo(r.date) < -365;
+        return html`<div key=${i} className="fa">
+          <div className="fa-top"><b>${A.name}</b><span className=${"pill " + (/buy|outperform|overweight/i.test(r.rating) ? "c-sb" : /sell|under/i.test(r.rating) ? "c-s" : "c-h")}>${r.he}</span></div>
+          <div className="muted" style=${{ fontSize: 13.5 }}>${A.firm} · ${A.focus}${r.target ? " · יעד " + usd(r.target, 0) : ""} · ${r.dateLabel || dt(r.date)}</div>
+          ${old ? html`<div style=${{ fontSize: 12.5, color: "var(--amber)" }}>הדירוג האחרון שמצאנו בשמו ישן משנה – ייתכן שאינו מעודכן</div>` : null}
+          <a href=${r.src} target="_blank" rel="noopener" style=${{ fontSize: 12.5 }}>מקור ↗</a></div>`;
+      }) : html`<p className="muted" style=${{ fontSize: 13.5, margin: 0 }}>אף אחד מהאנליסטים שאנחנו עוקבים אחריהם (${all.map(function (a) { return a.name; }).join(", ")}) לא מכסה את המניה הזו.</p>`}
+    </div>`;
+  }
+
+  // ---------- paper portfolio ----------
+  var CHECK = ["אני מבין מה החברה עושה ואיך היא מרוויחה", "בדקתי את מחיר הכניסה והשווי ההוגן", "החלטתי כמה אחוז מהתיק זה יהיה", "החלטתי מתי אמכור (ברווח וגם בהפסד)", "אני יודע למה דווקא עכשיו"];
+  function paperFee(P, amt) { return P.fees ? Math.max(5, amt * 0.001) : 0; }
+  function PaperSetup(props) {
+    var fx = props.data.fx || { now: 3.15 };
+    var _a = useState(200000), amt = _a[0], setAmt = _a[1];
+    var _c = useState("usd"), cur = _c[0], setCur = _c[1];
+    var _o = useState({ fees: true, tax: true, bench: true }), o = _o[0], setO = _o[1];
+    var spx = (props.data.indices || []).find(function (x) { return x.id === "SPX"; });
+    function open() {
+      var usdAmt = cur === "ils" ? amt / fx.now : amt;
+      props.setP({ v: 1, start: amt, startUsd: usdAmt, cur: cur, fx0: fx.now, fees: o.fees, tax: o.tax, bench: o.bench, date: new Date().toISOString().slice(0, 10), spx0: spx ? spx.level : null, cash: usdAmt, lots: [], trades: [], realized: 0, taxPaid: 0, feesPaid: 0 });
+    }
+    function tog(k) { var n = Object.assign({}, o); n[k] = !n[k]; setO(n); }
+    var sym = cur === "ils" ? "₪" : "$";
+    return html`<div className="paper-setup">
+      <span className="pill" style=${{ color: "#8BB6FF" }}>כסף וירטואלי · בלי סיכון</span>
+      <h3 style=${{ fontSize: 24, margin: "8px 0 4px" }}>התיק הניסיוני שלך</h3>
+      <p style=${{ marginTop: 0 }}>מתאמנים על השקעות בלי לסכן שקל: קונים ומוכרים מניות אמיתיות במחירים אמיתיים, אבל עם כסף מדומה. כך לומדים איך זה מרגיש לפני שמשקיעים באמת.</p>
+      <label htmlFor="pamt" style=${{ fontWeight: 700 }}>עם כמה כסף להתחיל?</label>
+      <div className="paper-amt">${N(sym + amt.toLocaleString("en-US"))}</div>
+      <input id="pamt" type="range" min="100000" max="500000" step="50000" value=${amt} onInput=${function (ev) { setAmt(+ev.target.value); }} style=${{ width: "100%", accentColor: "var(--gold)" }}/>
+      <div className="seg" style=${{ margin: "10px 0" }}>${[["usd", "דולרים ($)"], ["ils", "שקלים (₪)"]].map(function (c) { return html`<button key=${c[0]} className=${cur === c[0] ? "on" : ""} onClick=${function () { setCur(c[0]); }}>${c[1]}</button>`; })}</div>
+      ${[["fees", "עמלות קנייה ומכירה", "כמו בבית השקעות: 0.1% מכל עסקה, מינימום $5"], ["tax", "מס רווחי הון במכירה", "25% מהרווח – כדי לראות כמה באמת נשאר"], ["bench", "השוואה ל־S&P 500", "האם הייתי מרוויח יותר אילו פשוט קניתי את המדד?"]].map(function (x) {
+        return html`<label key=${x[0]} className="opt"><input type="checkbox" checked=${o[x[0]]} onChange=${function () { tog(x[0]); }}/><span><b>${x[1]}</b><br/><span className="muted" style=${{ fontSize: 13 }}>${x[2]}</span></span></label>`;
+      })}
+      <button className="btn" style=${{ width: "100%", minHeight: 52, fontSize: 17, marginTop: 10 }} onClick=${open}>פתח את התיק הניסיוני</button>
+      <p className="muted" style=${{ fontSize: 12.5, textAlign: "center" }}>אפשר לאפס ולהתחיל מחדש בכל רגע. אימון בלבד, לא ייעוץ השקעות.</p>
+    </div>`;
+  }
+  function PaperBuy(props) {
+    var P = props.P, q = props.q, data = props.data;
+    var _c = useState(CHECK.map(function () { return false; })), ch = _c[0], setCh = _c[1];
+    var _r = useState(""), reason = _r[0], setReason = _r[1];
+    var _a = useState(""), amt = _a[0], setAmt = _a[1];
+    var a = parseFloat(amt) || 0, qty = q.price ? a / q.price : 0, fee = a ? paperFee(P, a) : 0;
+    var ok = ch.every(Boolean) && reason.trim().length >= 5 && a > 0 && a + fee <= P.cash + 0.001;
+    var V = q.deep ? C.verdictLine(C.pillars(q.s, q.d, props.mkt1y)) : null;
+    var Lr = q.deep ? C.lenses(q.s, q.d, { peHist: C.peHistory(q.s, q.d, data.history) }) : null;
+    var Z = q.deep ? C.sizing(q.s, q.d, load("shemesh-style", "balanced")) : null;
+    var tot = props.total, w = tot ? a / tot * 100 : 0;
+    return html`<div className="paper-panel">
+      <div style=${{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}><h3 style=${{ margin: 0 }}>קנייה: ${q.name}</h3><b>${N(usd(q.price))}</b></div>
+      ${q.deep ? html`<div className="ours" style=${{ marginTop: 10 }}>
+        <div className="kicker" style=${{ color: "var(--gold)" }}>חוות הדעת שלנו</div>
+        <p style=${{ margin: "4px 0" }}>${V.text}</p>
+        <div className="muted" style=${{ fontSize: 13 }}>המלצת המודל: <b>${q.d.rec.he}</b> · מחיר כניסה ${usd(q.d.entry, 0)} · המשקיעים הגדולים: ${Lr.tally.g} בעד, ${Lr.tally.y} בזהירות, ${Lr.tally.r} נגד</div>
+      </div>` : html`<p className="muted">למניה הזו עדיין אין ניתוח מלא – רק מחיר. כדאי לבדוק אותה לעומק לפני שקונים.</p>`}
+      <fieldset className="checklist"><legend>רשימת בדיקה לפני קנייה</legend>${CHECK.map(function (c, i) {
+        return html`<label key=${i}><input type="checkbox" checked=${ch[i]} onChange=${function () { var n = ch.slice(); n[i] = !n[i]; setCh(n); }}/> ${c}</label>`;
+      })}</fieldset>
+      <label htmlFor="preason" style=${{ fontWeight: 700 }}>למה אתה קונה? (נשמר ביומן ההשקעה)</label>
+      <textarea id="preason" rows="2" value=${reason} onInput=${function (ev) { setReason(ev.target.value); }} placeholder="למשל: עסק חזק, המחיר מתחת למחיר הכניסה, ואני מוכן להחזיק שנתיים."></textarea>
+      <div className="tk-in" style=${{ marginTop: 8 }}>
+        <label htmlFor="pamt2" className="muted">סכום ($)</label>
+        <input id="pamt2" className="num-in" type="number" min="0" step="100" value=${amt} onInput=${function (ev) { setAmt(ev.target.value); }} placeholder=${"עד " + Math.floor(P.cash).toLocaleString("en-US")}/>
+        <span className="muted" style=${{ fontSize: 13 }}>${a ? "≈ " + qty.toFixed(qty < 10 ? 2 : 0) + " מניות · עמלה " + usd(fee, 2) + " · " + pct(w, 1) + " מהתיק" : ""}</span>
+      </div>
+      ${Z && w > Z.maxPct + 0.5 ? html`<div className="note-warn" style=${{ marginTop: 8 }}>⚠ זה ${pct(w, 0)} מהתיק. לפי הסיכון של המניה מומלץ עד ${Z.maxPct}%. מותר – זה אימון – אבל שים לב לריכוז.</div>` : null}
+      ${a + fee > P.cash ? html`<div className="down" style=${{ fontSize: 13 }}>אין מספיק מזומן פנוי.</div>` : null}
+      <div style=${{ display: "flex", gap: 8, marginTop: 10 }}>
+        <button className="btn" disabled=${!ok} onClick=${function () { props.onBuy(q, a, fee, reason.trim()); }}>אשר קנייה</button>
+        <button className="btn ghost" onClick=${props.onCancel}>ביטול</button>
+      </div>
+      ${!ok ? html`<p className="muted" style=${{ fontSize: 12.5 }}>כדי לאשר: לסמן את כל חמש השאלות, לכתוב למה, ולבחור סכום.</p>` : null}
+    </div>`;
+  }
+  function PaperPortfolio(props) {
+    var data = props.data, uni = props.uni, fx = data.fx || { now: 3.15 };
+    var _p = useStored("shemesh-paper", null), P = _p[0], setP = _p[1];
+    var _b = useState(null), buyT = _b[0], setBuyT = _b[1];
+    var _s = useState(null), sellT = _s[0], setSellT = _s[1];
+    var _sq = useState(""), sellQ = _sq[0], setSellQ = _sq[1];
+    if (!P) return e(PaperSetup, { data: data, setP: setP });
+    var spx = (data.indices || []).find(function (x) { return x.id === "SPX"; });
+    var g = {}; P.lots.forEach(function (l) { (g[l.t] = g[l.t] || []).push(l); });
+    var rows = Object.keys(g).map(function (t) {
+      var q = quote(t, data, uni), qty = 0, cost = 0; g[t].forEach(function (l) { qty += l.qty; cost += l.qty * l.price; });
+      var px = q ? q.price : cost / qty, val = qty * px;
+      var sec = q && q.deep ? q.s.sector : (uni && uni.map[t] ? secHe(uni, uni.map[t][3]) : "אחר");
+      return { t: t, q: q, qty: qty, cost: cost, avg: cost / qty, px: px, val: val, pl: val - cost, sec: sec };
+    }).filter(function (r) { return r.qty > 1e-9; });
+    var inv = rows.reduce(function (a, r) { return a + r.val; }, 0), tot = P.cash + inv;
+    var ret = (tot / P.startUsd - 1) * 100, spxRet = P.spx0 && spx ? (spx.level / P.spx0 - 1) * 100 : null;
+    var ils = P.cur === "ils";
+    function money(vUsd, d0) { return ils ? "₪" + Math.round(vUsd * fx.now).toLocaleString("en-US") : usd(vUsd, d0 == null ? 0 : d0); }
+    var plIls = ils ? tot * fx.now - P.start : null;
+    var days = -daysTo(P.date), lastTrade = P.trades.length ? P.trades[P.trades.length - 1].date : P.date, quiet = -daysTo(lastTrade);
+    function buy(q, a, fee, reason) {
+      var n = JSON.parse(JSON.stringify(P)), today = new Date().toISOString().slice(0, 10);
+      n.lots.push({ id: Date.now() + "-" + q.t, t: q.t, qty: a / q.price, price: q.price, date: today, reason: reason });
+      n.cash -= a + fee; n.feesPaid += fee;
+      n.trades.push({ type: "buy", t: q.t, qty: a / q.price, price: q.price, amt: a, fee: fee, date: today });
+      setP(n); setBuyT(null);
+      if (props.setJournal && !(props.journal || {})[q.t]) { var j = Object.assign({}, props.journal || {}); j[q.t] = { thesis: "תיק ניסיוני: " + reason, rules: [], created: today }; props.setJournal(j); }
+    }
+    function sell(r, qty) {
+      qty = Math.min(qty, r.qty); if (!(qty > 0)) return;
+      var n = JSON.parse(JSON.stringify(P)), today = new Date().toISOString().slice(0, 10);
+      var proceeds = qty * r.px, fee = paperFee(P, proceeds), basis = qty * r.avg, gain = proceeds - fee - basis, tax = P.tax && gain > 0 ? gain * 0.25 : 0;
+      var left = qty; n.lots = n.lots.map(function (l) { if (l.t !== r.t || left <= 0) return l; var take = Math.min(l.qty, left); left -= take; return Object.assign({}, l, { qty: l.qty - take }); }).filter(function (l) { return l.qty > 1e-9; });
+      n.cash += proceeds - fee - tax; n.feesPaid += fee; n.taxPaid += tax; n.realized += gain;
+      n.trades.push({ type: "sell", t: r.t, qty: qty, price: r.px, amt: proceeds, fee: fee, tax: tax, gain: gain, date: today });
+      setP(n); setSellT(null); setSellQ("");
+    }
+    // lessons
+    var lessons = [];
+    rows.forEach(function (r) { if (r.q && r.q.deep) { var Z = C.sizing(r.q.s, r.q.d, load("shemesh-style", "balanced")), w = r.val / tot * 100; if (w > Z.maxPct + 1) lessons.push(["ריכוז", r.q.name + " תופסת " + pct(w, 1) + " מהתיק, ולפי הסיכון שלה מומלץ עד " + Z.maxPct + "%." + (r.pl < 0 && Math.abs(r.pl) > Math.abs(tot - P.startUsd) * 0.5 ? " רוב ההפסד של התיק מגיע ממנה." : "")]); } });
+    var secs = {}; rows.forEach(function (r) { secs[r.sec] = (secs[r.sec] || 0) + r.val; });
+    Object.keys(secs).forEach(function (k) { if (inv && secs[k] / tot > 0.5) lessons.push(["פיזור", "יותר מחצי מהתיק בתחום אחד (" + k + "). נפילה בתחום הזה תפגע בכל התיק."]); });
+    if (days >= 7 && P.cash / tot > 0.8) lessons.push(["כסף שלא עובד", "יותר מ־80% מהתיק עדיין במזומן. גם זו החלטה – אבל לאורך זמן מזומן לא צומח."]);
+    if (P.bench && spxRet != null && days >= 14) lessons.push(ret >= spxRet ? ["מול המדד", "בינתיים התיק שלך (" + pct(ret, 1, true) + ") מנצח את ה־S&P 500 (" + pct(spxRet, 1, true) + "). בדוק אם זו שיטה או מזל – עקוב עוד כמה חודשים."] : ["מול המדד", "ה־S&P 500 עשה " + pct(spxRet, 1, true) + " והתיק שלך " + pct(ret, 1, true) + ". זו בדיוק הסיבה שרוב המקצוענים ממליצים להתחיל ממדד."]);
+    var ch = [
+      ["מפוזר", "5 מניות לפחות מ־3 תחומים", rows.length >= 5 && Object.keys(secs).length >= 3],
+      ["סבלני", "30 יום בלי לגעת בתיק", rows.length > 0 && quiet >= 30],
+      ["מנצח את המדד", "אחרי 30 יום, תשואה מעל ה־S&P 500", days >= 30 && spxRet != null && ret > spxRet]
+    ];
+    var sr = sellT ? rows.find(function (r) { return r.t === sellT; }) : null;
+    var vixI = ((data.markets && data.markets.items) || []).find(function (x) { return x.k === "vix"; });
+    return html`<div>
+      <div style=${{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+        <span className="pill" style=${{ color: "#8BB6FF" }}>כסף וירטואלי</span>
+        <span className="muted" style=${{ fontSize: 13 }}>נפתח ב־${dt(P.date)} עם ${ils ? "₪" + P.start.toLocaleString("en-US") : usd(P.start, 0)}</span>
+      </div>
+      <div className="paper-sum">
+        <div className="muted">שווי התיק</div>
+        <div className="paper-val"><b>${N(money(tot))}</b><span className=${cls(ret)}>${N((ret >= 0 ? "+" : "−") + money(Math.abs(tot - P.startUsd)) + " (" + pct(ret, 1, true) + ")")}</span></div>
+        ${ils ? html`<div className="muted" style=${{ fontSize: 13 }}>בשקלים, כולל השפעת הדולר: ${N((plIls >= 0 ? "+" : "−") + "₪" + Math.abs(Math.round(plIls)).toLocaleString("en-US"))}</div>` : null}
+        <div className="kpis" style=${{ marginTop: 10 }}>
+          <div className="kpi"><div className="l">מזומן פנוי</div><div className="v">${N(money(P.cash))}</div></div>
+          <div className="kpi"><div className="l">מושקע במניות</div><div className="v">${N(pct(tot ? inv / tot * 100 : 0, 0))}</div></div>
+          <div className="kpi"><div className="l">עמלות ומס ששולמו</div><div className="v">${N(money(P.feesPaid + P.taxPaid))}</div></div>
+        </div>
+        ${P.bench && spxRet != null ? html`<div className=${"vs " + (ret >= spxRet ? "good" : "bad")}>מול השוק: ה־S&P 500 ${spxRet >= 0 ? "עלה" : "ירד"} מאז הפתיחה ${pct(Math.abs(spxRet), 1)}. ${ret >= spxRet ? html`<b>התיק שלך עושה טוב יותר – בינתיים.</b>` : html`<b>המדד עושה טוב יותר מהתיק שלך.</b>`}</div>` : null}
+      </div>
+      ${buyT ? null : html`<div className="paper-buybar"><${TickerInput} data=${data} uni=${uni} btn="+ קנה מניה" ph="איזו מניה לקנות? סימול או שם" onOk=${function (T) { setBuyT(T); setSellT(null); }}/></div>`}
+      ${buyT && quote(buyT, data, uni) ? html`<${PaperBuy} key=${buyT} P=${P} q=${quote(buyT, data, uni)} data=${data} mkt1y=${props.mkt1y} total=${tot} onBuy=${buy} onCancel=${function () { setBuyT(null); }}/>` : null}
+      ${sr ? html`<div className="paper-panel">
+        <h3 style=${{ marginTop: 0 }}>מכירה: ${sr.q ? sr.q.name : sr.t}</h3>
+        ${(sr.pl / sr.cost < -0.15 || (vixI && vixI.value > 30)) ? html`<div className="note-warn">רגע לפני: ${sr.pl / sr.cost < -0.15 ? "המניה ירדה " + pct(Math.abs(sr.pl / sr.cost * 100), 0) + " מהמחיר שלך. " : ""}בהיסטוריה, רוב הנפילות הגדולות של השוק התאוששו – ומי שמכר בתחתית נעל את ההפסד. השאלה הנכונה: האם הסיבה שקנית עדיין נכונה? <button className="lnk" onClick=${function () { props.goLearn && props.goLearn("crash"); }}>מה קרה בנפילות הקודמות</button></div>` : null}
+        <div className="tk-in"><input className="num-in" type="number" min="0" step="any" value=${sellQ} placeholder=${"עד " + sr.qty.toFixed(2) + " מניות"} onInput=${function (ev) { setSellQ(ev.target.value); }} aria-label="כמות למכירה"/>
+          <button className="chipbtn" onClick=${function () { setSellQ(String(sr.qty)); }}>הכול</button></div>
+        <div style=${{ display: "flex", gap: 8, marginTop: 10 }}><button className="btn" onClick=${function () { sell(sr, parseFloat(sellQ)); }} disabled=${!(parseFloat(sellQ) > 0)}>אשר מכירה</button><button className="btn ghost" onClick=${function () { setSellT(null); }}>ביטול</button></div>
+      </div>` : null}
+      <h3 style=${{ margin: "18px 0 8px" }}>ההחזקות שלך</h3>
+      ${!rows.length ? html`<p className="muted">עוד לא קנית כלום. בחר מניה למעלה – לפני כל קנייה תקבל את חוות הדעת שלנו ורשימת בדיקה קצרה.</p>` : rows.map(function (r) {
+        var w = tot ? r.val / tot * 100 : 0, plp = r.pl / r.cost * 100;
+        return html`<div key=${r.t} className="ph">
+          <div className="ph-top"><button className="lnk" onClick=${function () { props.onPick(r.t); }}><b>${r.q ? r.q.name : r.t}</b></button><b>${N(money(r.val))}</b></div>
+          <div className="ph-mid muted"><span>${r.qty.toFixed(r.qty < 10 ? 2 : 0)} מניות · ממוצע ${usd(r.avg)}</span><span className=${cls(r.pl)}>${(r.pl >= 0 ? "+" : "−") + money(Math.abs(r.pl)) + " (" + pct(plp, 1, true) + ")"}</span></div>
+          <div className="ph-mid"><span className="muted">משקל ${pct(w, 1)}</span>${r.q && r.q.deep ? html`<span className=${"pill " + r.q.rec.cls}>${r.q.rec.he}</span>` : null}<button className="chipbtn" onClick=${function () { setSellT(r.t); setBuyT(null); setSellQ(""); }}>מכור</button></div>
+        </div>`;
+      })}
+      ${lessons.length ? html`<div className="lessons"><div className="kicker" style=${{ color: "var(--gold)" }}>מה אפשר ללמוד מהתיק שלך</div>${lessons.map(function (l, i) { return html`<p key=${i}><b>${l[0]}:</b> ${l[1]}</p>`; })}</div>` : null}
+      <h3 style=${{ margin: "18px 0 8px" }}>אתגרים</h3>
+      <div className="chal">${ch.map(function (c) { return html`<div key=${c[0]} className=${"chal-i" + (c[2] ? " done" : "")}><b>${c[2] ? "✓ " : ""}${c[0]}</b><span>${c[1]}</span></div>`; })}</div>
+      ${P.trades.length ? html`<details style=${{ marginTop: 14 }}><summary style=${{ cursor: "pointer", fontWeight: 700, minHeight: 44, display: "flex", alignItems: "center" }}>היסטוריית פעולות (${P.trades.length})</summary>
+        <ul className="hist">${P.trades.slice().reverse().map(function (t, i) { var q = quote(t.t, data, uni); return html`<li key=${i}><span>${t.type === "buy" ? "קנייה" : "מכירה"}: ${t.qty.toFixed(t.qty < 10 ? 2 : 0)} ${q ? q.name : t.t} ב־${usd(t.price)}</span><span className="muted">${dt(t.date)} · ${usd(t.amt, 0)}${t.tax ? " · מס " + usd(t.tax, 0) : ""}</span></li>`; })}</ul></details>` : null}
+      <div style=${{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 14, flexWrap: "wrap", gap: 8 }}>
+        <button className="btn ghost danger" onClick=${function () { if (window.confirm ? window.confirm("לאפס את התיק הניסיוני ולהתחיל מחדש?") : true) setP(null); }}>אפס והתחל מחדש</button>
+        <span className="muted" style=${{ fontSize: 12.5 }}>קנייה ומכירה לפי מחיר הסגירה האחרון מהעדכון היומי</span>
+      </div>
+      <p className="method">אימון בכסף מדומה – לא ייעוץ השקעות. התיק נשמר בדפדפן הזה בלבד (אפשר לגבות אותו עם "גיבוי לקובץ" בלשונית "התיק שלי").</p>
+    </div>`;
+  }
+
+  // ---------- learning ----------
+  function lessonsFor(data, extras) {
+    var spx = (data.indices || []).find(function (x) { return x.id === "SPX"; }) || {};
+    var nv = data.stocks.NVDA, ko = data.stocks.KO, dn = nv && C.derive(nv), dk = ko && C.derive(ko);
+    var sp = extras && extras.spiva;
+    return [
+      { id: "stock", t: "מה זו מניה?", m: 3, body: ["מניה היא חלק קטן בבעלות על חברה. מי שקונה מניה של אפל הוא בעלים של חלק זעיר מאפל – כולל זכות לחלק מהרווחים.", "המחיר של מניה זז כל יום לפי היצע וביקוש, אבל לאורך שנים הוא הולך בעקבות דבר אחד: כמה החברה מרוויחה, וכמה היא צפויה להרוויח בעתיד.", "שתי דרכים להרוויח ממניה: עליית מחיר, ודיבידנד – חלק מהרווח שהחברה מחלקת במזומן."],
+        quiz: [["מה קונים כשקונים מניה?", ["הלוואה לחברה", "חלק בבעלות על החברה", "מוצר של החברה"], 1, "מניה = בעלות. הלוואה לחברה נקראת אג״ח."], ["מה מזיז מחיר של מניה לאורך שנים?", ["החדשות של היום", "הרווחים של החברה", "מספר העובדים"], 1, "בטווח הקצר – רגשות וחדשות. בטווח הארוך – רווחים."]] },
+      { id: "index", t: "מה זה מדד, ולמה כולם מדברים על S&P 500?", m: 3, body: ["מדד הוא סל של הרבה מניות שמייצג שוק שלם. ה־S&P 500 כולל את 500 החברות הגדולות בארה״ב – ועומד היום על " + (spx.level ? Math.round(spx.level).toLocaleString("en-US") : "—") + " נקודות.", "כשמישהו אומר ״השוק עלה״, הוא בדרך כלל מתכוון למדד הזה.", "אפשר ״לקנות את המדד״ דרך קרן מחקה (ETF) – וכך להחזיק בבת אחת חלק קטן מכל 500 החברות."],
+        quiz: [["כמה חברות יש ב־S&P 500?", ["50", "500", "5,000"], 1, "500 החברות הגדולות בארה״ב."], ["איך אפשר לקנות את כל המדד בפעולה אחת?", ["קרן מחקה (ETF)", "מניה של בנק", "אי אפשר"], 0, "קרן מחקה קונה את כל המניות במדד בשבילך."]] },
+      { id: "pe", t: "מכפיל רווח: מתי מניה יקרה?", m: 4, body: ["מכפיל רווח (P/E) = מחיר המניה חלקי הרווח למניה. הוא אומר כמה שנים של רווח אתה משלם.", dn && dk ? "דוגמה מהאתר: אנבידיה נסחרת במכפיל " + (dn.pe ? dn.pe.toFixed(0) : "—") + " וקוקה־קולה במכפיל " + (dk.pe ? dk.pe.toFixed(0) : "—") + ". למה? אנבידיה צפויה לצמוח הרבה יותר מהר – ולכן המשקיעים מוכנים לשלם יותר על כל דולר רווח היום." : "", "מכפיל גבוה הוא לא בהכרח ״יקר״ – הוא מוצדק רק אם הצמיחה מהירה. לכן בודקים גם PEG: המכפיל חלקי קצב הצמיחה."],
+        quiz: [["מניה במחיר 100$ ורווח של 5$ למניה – מה המכפיל?", ["5", "20", "500"], 1, "100 חלקי 5 = 20."], ["מתי מכפיל גבוה מוצדק?", ["כשהחברה ותיקה", "כשהצמיחה מהירה", "אף פעם"], 1, "משלמים יותר על עסק שהרווחים שלו צפויים לגדול מהר."]] },
+      { id: "spread", t: "פיזור: לא לשים את כל הביצים בסל אחד", m: 3, body: ["גם חברות מצוינות יכולות לרדת 50% בשנה רעה. אם כל הכסף במניה אחת – כל התיק יורד איתה.", "פיזור = כמה מניות, מכמה תחומים (טכנולוגיה, בריאות, צריכה, אנרגיה). כשתחום אחד נופל, אחרים מאזנים.", "באתר, בכל מניה יש ״כמה לקנות?״ – המלצה כמה אחוז מהתיק לשים בה לפי הסיכון שלה."],
+        quiz: [["מה הכי מפוזר?", ["מניה אחת מצוינת", "5 מניות טכנולוגיה", "8 מניות מ־4 תחומים"], 2, "גם הרבה מניות מאותו תחום נופלות יחד."], ["למה מניה מסוכנת צריכה לקבל חלק קטן מהתיק?", ["כי היא זולה", "כדי שנפילה שלה לא תפיל את כל התיק", "כי ככה החוק"], 1, "גודל הפוזיציה קובע כמה נפילה אחת יכולה להזיק."]] },
+      { id: "compound", t: "ריבית דריבית: הכוח הכי חזק בהשקעות", m: 3, body: ["כשהתשואה מצטרפת לקרן, בשנה הבאה מרוויחים גם עליה. אחרי 10 שנים זה מורגש, אחרי 30 שנה זה מדהים.", "דוגמה: 1,000 ₪ בחודש במשך 30 שנה, בתשואה שנתית של 7%, יהיו בערך 1.2 מיליון ₪ – כשהפקדת רק 360 אלף.", "המסקנה: הזמן חשוב יותר מהתזמון. להתחיל מוקדם, גם עם סכום קטן. נסו את המחשבון למטה."],
+        quiz: [["מה הכי משפיע על ריבית דריבית?", ["זמן", "מזל", "השעה שבה קונים"], 0, "ככל שהזמן ארוך יותר, האפקט חזק יותר."], ["מי ירוויח יותר: מי שהתחיל בגיל 25 או בגיל 40, עם אותו סכום חודשי?", ["בגיל 25", "בגיל 40", "אותו דבר"], 0, "15 שנים נוספות של ריבית דריבית עושות הבדל עצום."]] },
+      { id: "fees", t: "דמי ניהול: האויב השקט", m: 3, body: ["1% דמי ניהול בשנה נשמע מעט. אבל על פני 30 שנה, הוא יכול לאכול כחמישית מהכסף שהיה מצטבר.", "קרן מחקה על S&P 500 עולה בדרך כלל עשיריות האחוז בשנה – הרבה פחות מקרן מנוהלת.", "לפני כל השקעה, שאלו: כמה זה עולה לי בשנה? במחשבון למטה אפשר לראות את ההבדל בשקלים."],
+        quiz: [["על מה גובים דמי ניהול?", ["רק על הרווח", "על כל הסכום, כל שנה", "רק בקנייה"], 1, "דמי ניהול נגבים מכל הסכום, גם בשנים של הפסד."], ["למה קרן מחקה זולה יותר?", ["כי אין בה מניות טובות", "כי היא רק מעתיקה מדד ולא צריכה מנהל שבוחר", "כי היא חדשה"], 1, "אין צוות שבוחר מניות – ולכן העלות נמוכה."]] },
+      { id: "tax", t: "מס ודולר: כמה באמת נשאר ביד", m: 3, body: ["בישראל משלמים 25% מס רווחי הון על הרווח, רק כשמוכרים. כל עוד לא מכרת – המס ״מחכה״.", "מניות בוול סטריט נקנות בדולרים. אם הדולר יורד מול השקל, הרווח בשקלים קטן – גם אם המניה עלתה.", "בלשונית ״התיק שלי״ אפשר לראות את התיק בשקלים, כולל השפעת הדולר ומס משוער."],
+        quiz: [["מתי משלמים מס רווחי הון?", ["כל שנה", "כשמוכרים ברווח", "כשקונים"], 1, "המס נגבה רק במכירה ברווח."], ["המניה עלתה 10% והדולר ירד 10%. מה הרווח בשקלים?", ["בערך 0%", "20%", "10%"], 0, "העלייה במניה ״נמחקת״ בירידת הדולר."]] },
+      { id: "indexfirst", t: "האמת: רוב המקצוענים לא מנצחים את המדד", m: 4, body: [sp ? "לפי דוח SPIVA של S&P (" + sp.asOf + "), " + sp.rows.map(function (r) { return Math.round(r[1]) + "% מהקרנות המנוהלות בארה״ב פיגרו אחרי ה־S&P 500 ב" + r[0]; }).join("; ") + "." : "", "כלומר: רוב מנהלי הקרנות, עם צוותים ומחקר, לא מצליחים לנצח את המדד לאורך זמן. רובם גם גובים דמי ניהול גבוהים יותר.", "לכן לרוב האנשים הצעד הראשון הנכון הוא קרן מחקה מדד. בחירת מניות יכולה להיות חלק קטן ומעניין מהתיק – ובשביל זה בדיוק יש את התיק הניסיוני."],
+        quiz: [["כמה מהקרנות המנוהלות פיגרו אחרי המדד ב־15 שנה?", ["כ־20%", "כ־50%", "כ־90%"], 2, "כ־90% לפי SPIVA."], ["מה הצעד הראשון הנבון לרוב המתחילים?", ["מניה אחת חמה", "קרן מחקה מדד", "מסחר יומי"], 1, "פיזור רחב, עלות נמוכה, ובלי צורך לבחור."]] }
+    ];
+  }
+  function Academy(props) {
+    var L = lessonsFor(props.data, props.extras);
+    var _p = useStored("shemesh-academy", {}), prog = _p[0], setProg = _p[1];
+    var _o = useState(props.open || null), open = _o[0], setOpen = _o[1];
+    var _a = useState({}), ans = _a[0], setAns = _a[1];
+    var done = L.filter(function (l) { return prog[l.id]; }).length;
+    var cur = L.find(function (l) { return l.id === open; });
+    function pickAns(qi, oi) { var n = Object.assign({}, ans); n[open + qi] = oi; setAns(n); var allOk = cur.quiz.every(function (q, i) { return (i === qi ? oi : n[open + i]) === q[2]; }); if (allOk) { var p = Object.assign({}, prog); p[open] = true; setProg(p); } }
+    return html`<section className="card" id="sec-academy">
+      <div className="sec-h"><div><div className="kicker">הצעדים הראשונים</div><h2>מסלול למתחילים: ${L.length} שיעורים קצרים</h2></div><div className="hint">${done}/${L.length} הושלמו</div></div>
+      <div className="prog"><span style=${{ width: (done / L.length * 100) + "%" }}></span></div>
+      ${cur ? html`<div className="lesson">
+        <button className="lnk" onClick=${function () { setOpen(null); }}>→ חזרה לרשימה</button>
+        <h3 style=${{ fontSize: 22, margin: "8px 0" }}>${cur.t}</h3>
+        ${cur.body.filter(Boolean).map(function (b, i) { return html`<p key=${i}>${b}</p>`; })}
+        <div className="quiz"><div className="kicker">בדוק את עצמך</div>${cur.quiz.map(function (q, qi) {
+          var a = ans[open + qi];
+          return html`<div key=${qi} className="qz"><b>${q[0]}</b><div className="qz-o">${q[1].map(function (o, oi) {
+            var st = a == null ? "" : oi === q[2] ? " ok" : a === oi ? " bad" : "";
+            return html`<button key=${oi} className=${"chipbtn" + st} aria-pressed=${a === oi} onClick=${function () { pickAns(qi, oi); }}>${o}</button>`;
+          })}</div>${a != null ? html`<div className=${a === q[2] ? "up" : "down"} style=${{ fontSize: 13.5 }}>${a === q[2] ? "נכון! " : "לא בדיוק. "}${q[3]}</div>` : null}</div>`;
+        })}</div>
+        ${prog[open] ? html`<div className="vs good">✓ השיעור הושלם.${L.findIndex(function (l) { return l.id === open; }) < L.length - 1 ? html` <button className="lnk" onClick=${function () { var i = L.findIndex(function (l) { return l.id === open; }); setOpen(L[i + 1].id); setAns({}); }}>לשיעור הבא ←</button>` : " סיימת את כל המסלול – הזמן לנסות את התיק הניסיוני."}</div>` : null}
+      </div>` : html`<ol className="lessons-l">${L.map(function (l, i) {
+        return html`<li key=${l.id}><button onClick=${function () { setOpen(l.id); setAns({}); }}><span className=${"num" + (prog[l.id] ? " done" : "")}>${prog[l.id] ? "✓" : i + 1}</span><span className="lt">${l.t}</span><span className="muted" style=${{ fontSize: 13 }}>${l.m} דק׳</span></button></li>`;
+      })}</ol>`}
+    </section>`;
+  }
+  function TimeMachine(props) {
+    var data = props.data, H = data.history, fx = data.fx;
+    var opts = ["SPY"].concat(data.order.filter(function (t) { return H && H.series && H.series[t] && H.series[t].length >= 13; }));
+    var _t = useState("SPY"), t = _t[0], setT = _t[1];
+    var _a = useState(10000), amt = _a[0], setAmt = _a[1];
+    var _y = useState(5), yrs = _y[0], setYrs = _y[1];
+    function run(tk) {
+      var ser = H && H.series[tk]; if (!ser || !ser.length) return null;
+      var n = Math.min(yrs * 12, ser.length - 1), p0 = ser[ser.length - 1 - n], s = data.stocks[tk];
+      var pNow = s ? s.price : ser[ser.length - 1][1];
+      var f0 = fx ? fxAt(fx, p0[0]) : 1, fN = fx ? fx.now : 1;
+      var shares = amt / f0 / p0[1], val = shares * pNow * fN;
+      return { from: p0[0], val: val, ret: (val / amt - 1) * 100, usdRet: (pNow / p0[1] - 1) * 100 };
+    }
+    var r = run(t), b = t !== "SPY" ? run("SPY") : null;
+    function nm(tk) { return tk === "SPY" ? "מדד S&P 500 (דרך SPY)" : (data.stocks[tk] || {}).nameHe || tk; }
+    return html`<section className="card" id="sec-time">
+      <div className="sec-h"><div><div className="kicker">מכונת הזמן</div><h2>אם הייתי משקיע לפני כמה שנים…</h2></div></div>
+      <div className="scr-f">
+        <label>במה<select value=${t} onChange=${function (ev) { setT(ev.target.value); }}>${opts.map(function (o) { return html`<option key=${o} value=${o}>${nm(o)}</option>`; })}</select></label>
+        <label>כמה (₪)<input className="num-in" type="number" min="100" step="100" value=${amt} onInput=${function (ev) { setAmt(Math.max(0, +ev.target.value || 0)); }}/></label>
+        <div className="seg">${[1, 3, 5].map(function (y) { return html`<button key=${y} className=${yrs === y ? "on" : ""} onClick=${function () { setYrs(y); }}>לפני ${y === 1 ? "שנה" : y + " שנים"}</button>`; })}</div>
+      </div>
+      ${r ? html`<div className="tm-res">
+        <div>${amt.toLocaleString("en-US")} ₪ ב${nm(t)} ב־${lbl(r.from)} שווים היום</div>
+        <div className=${"tm-big " + cls(r.ret)}>${N("₪" + Math.round(r.val).toLocaleString("en-US"))}</div>
+        <div className="muted">${pct(r.ret, 1, true)} בשקלים · ${pct(r.usdRet, 1, true)} בדולרים${b ? " · המדד באותה תקופה: ₪" + Math.round(b.val).toLocaleString("en-US") + " (" + pct(b.ret, 1, true) + ")" : ""}</div>
+      </div>` : html`<p className="muted">אין מספיק היסטוריה.</p>`}
+      <p className="method">לפי סגירות חודשיות ושער הדולר הממוצע בחודש הקנייה, לפני עמלות ומס, ובלי דיבידנדים. ביצועי עבר לא מבטיחים ביצועים בעתיד – אבל הם מראים כמה תנודתית הדרך.</p>
+    </section>`;
+  }
+  function Compound() {
+    var _m = useState(1000), m = _m[0], setM = _m[1], _y = useState(30), y = _y[0], setY = _y[1], _r = useState(7), r = _r[0], setR = _r[1], _f = useState(1), f = _f[0], setF = _f[1];
+    function fv(rate) { var i = rate / 100 / 12, n = y * 12; return i ? m * ((Math.pow(1 + i, n) - 1) / i) : m * n; }
+    var gross = fv(r), net = fv(r - f), dep = m * y * 12;
+    function F(v) { return "₪" + Math.round(v).toLocaleString("en-US"); }
+    return html`<section className="card" id="sec-compound">
+      <div className="sec-h"><div><div className="kicker">מחשבון</div><h2><${Term} k="compound"/> ו<${Term} k="fee"/></h2></div></div>
+      <div className="scr-f">
+        <label>הפקדה חודשית (₪)<input className="num-in" type="number" min="0" step="100" value=${m} onInput=${function (ev) { setM(+ev.target.value || 0); }}/></label>
+        <label>שנים<input className="num-in" type="number" min="1" max="60" value=${y} onInput=${function (ev) { setY(Math.min(60, Math.max(1, +ev.target.value || 1))); }}/></label>
+        <label>תשואה שנתית (%)<input className="num-in" type="number" step="0.5" value=${r} onInput=${function (ev) { setR(+ev.target.value || 0); }}/></label>
+        <label>דמי ניהול (%)<input className="num-in" type="number" step="0.1" min="0" value=${f} onInput=${function (ev) { setF(Math.max(0, +ev.target.value || 0)); }}/></label>
+      </div>
+      <div className="kpis" style=${{ marginTop: 12 }}>
+        <div className="kpi"><div className="l">הפקדת בסך הכול</div><div className="v">${N(F(dep))}</div></div>
+        <div className="kpi"><div className="l">יצטבר (אחרי דמי ניהול)</div><div className="v up">${N(F(net))}</div></div>
+        <div className="kpi"><div className="l">דמי הניהול עלו לך</div><div className="v down">${N(F(gross - net))}</div><div className="s">${pct(gross ? (gross - net) / gross * 100 : 0, 0)} ממה שהיה מצטבר</div></div>
+      </div>
+      <p className="method">חישוב עם ריבית חודשית קבועה. תשואה של 7% היא הנחה לצורך הדגמה – השוק לא עולה בקו ישר, ויש שנים של ירידות.</p>
+    </section>`;
+  }
+  function IndexTruth(props) {
+    var sp = props.extras && props.extras.spiva;
+    return html`<section className="card" id="sec-index">
+      <div className="sec-h"><div><div className="kicker">לפני שבוחרים מניות</div><h2>האמת על מדדים</h2></div></div>
+      ${sp ? html`<div className="spiva">${sp.rows.map(function (r) { return html`<div key=${r[0]} className="sp-r"><span>${r[0]}</span><span className="track"><span style=${{ width: r[1] + "%" }}></span></span><b>${Math.round(r[1])}%</b></div>`; })}</div>
+      <p className="muted" style=${{ fontSize: 13.5 }}>אחוז הקרנות המנוהלות בארה״ב שפיגרו אחרי ה־S&P 500 (נכון ל${sp.asOf}). <a href=${sp.src} target="_blank" rel="noopener">SPIVA ↗</a></p>` : null}
+      <p>רוב מנהלי הקרנות לא מנצחים את המדד לאורך זמן. לכן לרוב האנשים הבסיס הנכון הוא <${Term} k="etf"/> על מדד רחב, ובחירת מניות – אם בכלל – היא חלק קטן מהתיק.</p>
+      <h3>איך משקיעים במדד מישראל?</h3>
+      <ul className="opts">
+        <li><b>קרן מחקה / קרן סל:</b> נקנית בחשבון מסחר בבנק או בבית השקעות, בבורסה בתל אביב או בחו״ל. דמי ניהול נמוכים.</li>
+        <li><b>קופת גמל להשקעה:</b> אפשר לבחור מסלול שעוקב אחרי ה־S&P 500. יש תקרת הפקדה שנתית, ויתרון מס אם מושכים אותה כקצבה בגיל פרישה.</li>
+        <li><b>IRA (ניהול אישי של כספי פנסיה):</b> מאפשר להשקיע בעצמך חלק מהחיסכון הפנסיוני – כולל במדדים. מתאים למי שכבר מבין מה הוא עושה.</li>
+      </ul>
+      <p className="method">התנאים, התקרות ודמי הניהול משתנים בין גופים ומעת לעת – בדקו מול הגוף המנהל או יועץ פנסיוני מורשה. זה מידע כללי, לא ייעוץ.</p>
+    </section>`;
+  }
+  function Crashes(props) {
+    var X = props.extras && props.extras.crashes; if (!X) return null;
+    return html`<section className="card" id="sec-crash">
+      <div className="sec-h"><div><div className="kicker">כשהשוק נופל</div><h2>מה קרה בנפילות הגדולות – ומה למדנו</h2></div></div>
+      <div className="crash">${X.map(function (c) {
+        return html`<div key=${c.name} className="cr"><div className="cr-top"><b>${c.name}</b><span className="down" style=${{ fontWeight: 800 }}>${N(c.drop + "%")}</span></div>
+          <div className="muted" style=${{ fontSize: 13 }}>S&P 500 · מ${c.peak} עד ${c.bottom} · ${c.recovery}</div><p>${c.lesson}</p></div>`;
+      })}</div>
+      <p><b>השורה התחתונה:</b> נפילות הן חלק רגיל מהשוק. הטעות הכי יקרה של מתחילים היא למכור בפאניקה בתחתית. לפני שמוכרים, שואלים: האם הסיבה שקניתי עדיין נכונה?</p>
+    </section>`;
+  }
+  function Glossary() {
+    var _q = useState(""), q = _q[0], setQ = _q[1];
+    var ks = Object.keys(GLOSS).filter(function (k) { return !q || GLOSS[k][0].indexOf(q) >= 0 || GLOSS[k][1].indexOf(q) >= 0; });
+    return html`<section className="card" id="sec-gloss">
+      <div className="sec-h"><div><div className="kicker">מילון</div><h2>מונחים בשפה פשוטה</h2></div></div>
+      <input className="num-in" style=${{ width: "100%", maxWidth: 360 }} placeholder="חפש מונח" value=${q} onInput=${function (ev) { setQ(ev.target.value); }} aria-label="חיפוש מונח"/>
+      <dl className="gloss">${ks.map(function (k) { return html`<div key=${k}><dt>${GLOSS[k][0]}</dt><dd>${GLOSS[k][1]}</dd></div>`; })}</dl>
+    </section>`;
+  }
+  function LearnMore(props) {
+    var X = props.extras && props.extras.learnMore; if (!X) return null;
+    return html`<section className="card"><div className="sec-h"><div><div className="kicker">להמשך</div><h2>איפה ללמוד עוד בעברית</h2></div></div>
+      <ul className="opts">${X.map(function (x) { return html`<li key=${x.url}><a href=${x.url} target="_blank" rel="noopener"><b>${x.name} ↗</b></a><br/><span className="muted" style=${{ fontSize: 13.5 }}>${x.note}</span></li>`; })}</ul>
+      <p className="method">קישורים לתוכן חיצוני לצורך למידה. אין לנו קשר מסחרי עם היוצרים, והם לא אחראים לתוכן באתר הזה.</p></section>`;
+  }
+
+  // ---------- investor profile (first visit) ----------
+  var PQ = [
+    ["לכמה זמן הכסף הזה מיועד?", [["פחות מ־3 שנים", 0], ["3–10 שנים", 1], ["יותר מ־10 שנים", 2]]],
+    ["התיק ירד 20% בחודש. מה תעשה?", [["אמכור הכול", 0], ["אחכה ואבדוק", 1], ["אקנה עוד", 2]]],
+    ["כמה ניסיון יש לך בהשקעות?", [["אין בכלל", 0], ["קצת", 1], ["הרבה", 2]]]
+  ];
+  function Profile(props) {
+    var _a = useState({}), a = _a[0], setA = _a[1];
+    var all = PQ.every(function (_, i) { return a[i] != null; });
+    function finish() {
+      var risk = (a[0] || 0) + (a[1] || 0), style = risk <= 1 ? "careful" : risk >= 3 ? "bold" : "balanced";
+      save("shemesh-style", style); props.setMode(a[2] === 2 ? "pro" : "simple");
+      props.setProfile({ style: style, exp: a[2], at: new Date().toISOString().slice(0, 10) });
+    }
+    return html`<section className="card profile">
+      <div className="sec-h"><div><div className="kicker">30 שניות</div><h2>בוא נכיר – כדי שהאתר יתאים לך</h2></div><button className="lnk" onClick=${function () { props.setProfile({ skipped: true }); }}>דלג</button></div>
+      ${PQ.map(function (q, i) { return html`<div key=${i} className="qz"><b>${q[0]}</b><div className="qz-o">${q[1].map(function (o) { return html`<button key=${o[1]} className=${"chipbtn" + (a[i] === o[1] ? " on" : "")} aria-pressed=${a[i] === o[1]} onClick=${function () { var n = Object.assign({}, a); n[i] = o[1]; setA(n); }}>${o[0]}</button>`; })}</div></div>`; })}
+      <button className="btn" disabled=${!all} onClick=${finish}>סיימתי</button>
+      <p className="method">התשובות נשמרות רק בדפדפן שלך. הן קובעות את רמת הפירוט ואת הסגנון ב״כמה לקנות?״ – אפשר לשנות בכל רגע.</p>
+    </section>`;
+  }
+  function NextStep(props) {
+    var prog = load("shemesh-academy", {}), L = lessonsFor(props.data, props.extras), done = L.filter(function (l) { return prog[l.id]; }).length, paper = load("shemesh-paper", null);
+    var step = done < L.length ? ["המשך ללמוד", "סיימת " + done + " מתוך " + L.length + " שיעורים במסלול למתחילים.", "learn"] : !paper ? ["נסה את התיק הניסיוני", "סיימת את המסלול – עכשיו תתאמן על השקעה בכסף מדומה.", "paper"] : ["בדוק את התיק הניסיוני", "איך התיק שלך מול המדד?", "paper"];
+    return html`<section className="card nextstep"><div><div className="kicker">הצעד הבא שלך</div><h3 style=${{ margin: "4px 0" }}>${step[0]}</h3><p className="muted" style=${{ margin: 0 }}>${step[1]}</p></div>
+      <button className="btn" onClick=${function () { props.go(step[2]); }}>${step[0]}</button></section>`;
+  }
+
   // ---------- app ----------
   function App() {
     var _d = useState(null), data = _d[0], setData = _d[1];
@@ -1628,6 +2088,11 @@
     var _pp = useState(""), portPreset = _pp[0], setPortPreset = _pp[1];
     var _md = useStored("shemesh-mode", "simple"), mode = _md[0], setMode = _md[1];
     var _jn = useStored("shemesh-journal", {}), journal = _jn[0], setJournal = _jn[1];
+    var _sc = useState(function () { return (location.hash || "").length > 1 ? "stock" : "home"; }), screen = _sc[0], setScreen = _sc[1];
+    var _st = useState("sum"), stab = _st[0], setStab = _st[1];
+    var _bg = useStored("shemesh-big", false), big = _bg[0], setBig = _bg[1];
+    var _pr = useStored("shemesh-profile", null), profile = _pr[0], setProfile = _pr[1];
+    var _x = useState(null), extras = _x[0], setExtras = _x[1];
     var syncRef = useRef("");
     useEffect(function () {
       if (!db) return;
@@ -1649,6 +2114,8 @@
       try { db.doc("my/state").set(Object.assign({ updatedAt: new Date().toISOString() }, payload)).catch(function () { }); } catch (e1) { }
     }, [db, watch, journal, port]);
     var pendingRef = useRef((location.hash || "").replace("#", "").toUpperCase());
+    var firstScreen = useRef(true);
+    useEffect(function () { if (firstScreen.current) { firstScreen.current = false; return; } try { window.scrollTo({ top: 0 }); } catch (x) { } }, [screen, stab]);
 
     useEffect(function () {
       fetch("data.json", { cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
@@ -1667,6 +2134,7 @@
         var h = pendingRef.current;
         if (h && u.map[h]) { setCur("L:" + h); pendingRef.current = ""; }
       }).catch(function () {});
+      fetch("extras.json").then(function (r) { return r.ok ? r.json() : null; }).then(function (x) { if (x) setExtras(x); }).catch(function () {});
       if (window.claude && window.claude.use) {
         window.claude.use("db").then(function (x) { if (x) setDb(x); }, function () {});
         window.claude.use("sample").then(function (x) { if (x) setSample(function () { return x; }); }, function () {});
@@ -1680,12 +2148,13 @@
         var T = t.toUpperCase();
         if (data.stocks[T]) key = T;
         else if (uni && uni.map[T]) key = "L:" + T;
-        else { setUnknown(t); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+        else { setUnknown(t); setScreen("stock"); return; }
       }
-      setCur(key);
+      setCur(key); setStab("sum"); setScreen("stock");
       try { history.replaceState(null, "", "#" + key.replace("IDX:", "").replace("L:", "").toLowerCase()); } catch (x) { }
-      setTimeout(function () { var el = document.getElementById("sec-main"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); else window.scrollTo({ top: 0, behavior: "smooth" }); }, 40);
+      try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch (x) { }
     }
+    function scrollTo(id) { setTimeout(function () { var el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }, 60); }
 
     if (err) return html`<div className="wrap"><div className="state">${err}</div></div>`;
     if (!data || !cur) return html`<div className="wrap"><div className="state">טוען את הדשבורד…</div></div>`;
@@ -1698,49 +2167,82 @@
     var mkt1y = spxI && spxI.ret1y != null ? spxI.ret1y : null;
     var uniAsOf = uni && uni.asOf ? dt(uni.asOf) : "";
     function toggleWatch(t) { setWatch(watch.some(function (w) { return w.t === t; }) ? watch.filter(function (w) { return w.t !== t; }) : watch.concat([{ t: t, alert: null, added: new Date().toISOString().slice(0, 10) }])); }
-    function openTool(tab, t) { setMyTab(tab); if (tab === "port" || tab === "journal") setPortPreset(t || ""); setTimeout(function () { var el = document.getElementById("sec-my"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }, 30); }
+    function openTool(tab, t) { setMyTab(tab); if (tab === "port" || tab === "journal") setPortPreset(t || ""); setScreen("mine"); }
     var sel = cmpSel || [data.stocks[cur] ? cur : data.order[0], data.order.find(function (t) { return t !== cur && t !== data.order[0]; }) || data.order[1]];
-    function addCompare(t) { var n = sel.indexOf(t) >= 0 ? sel : (sel.length >= 3 ? sel.slice(0, 2).concat([t]) : sel.concat([t])); setCmpSel(n); setTimeout(function () { var el = document.getElementById("sec-compare"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }, 30); }
+    function addCompare(t) { var n = sel.indexOf(t) >= 0 ? sel : (sel.length >= 3 ? sel.slice(0, 2).concat([t]) : sel.concat([t])); setCmpSel(n); setScreen("discover"); scrollTo("sec-compare"); }
+    function go(scr) { if (scr === "paper") return openTool("paper"); setScreen(scr); }
+    function goLearn(id) { setScreen("learn"); scrollTo(id === "crash" ? "sec-crash" : "sec-" + id); }
     var curT = idx ? null : lite ? lite[0] : cur;
-    var my = { data: data, uni: uni, watch: watch, setWatch: setWatch, port: port, setPort: setPort, onPick: pick, preset: portPreset, journal: journal, setJournal: setJournal };
+    var my = { data: data, uni: uni, watch: watch, setWatch: setWatch, port: port, setPort: setPort, onPick: pick, preset: portPreset, journal: journal, setJournal: setJournal, mkt1y: mkt1y, goLearn: goLearn };
     var simple = mode === "simple";
     var jHits = journalHits(journal, data, uni);
-    var main;
-    if (idx) main = html`<${IndexView} key=${idx.id} x=${idx} db=${db} sample=${sample}/>`;
-    else if (lite) main = html`<${LiteView} key=${lite[0]} row=${lite} uni=${uni} asOf=${uniAsOf} deep=${deep} db=${db} sample=${sample} onPick=${pick}/>`;
-    else main = html`<div>
-      <${Hero} s=${s} d=${d}/>
-      <${DecisionCard} s=${s} d=${d} mkt1y=${mkt1y}/>
-      <${PriceHistory} key=${"h-" + cur} s=${s} d=${d} hist=${data.history}/>
-      <${AnalystTools} key=${"at-" + cur} s=${s} d=${d} data=${data} mode=${mode}/>
-      <${Verdict} s=${s} d=${d}/>
-      <${Outlook} s=${s} d=${d}/>
-      ${simple ? html`<div className="card simple-more"><span>דוחות כספיים ל־5 שנים וטבלת האנליסטים של 4 הבנקים מוצגים במצב "מתקדם".</span><button className="btn ghost" onClick=${function () { setMode("pro"); }}>עבור למתקדם</button></div>` : html`<div><${Fin} key=${"fin-" + cur} s=${s} d=${d}/>
-      <${Analysts} s=${s} d=${d}/></div>`}</div>`;
-    return html`<div className="wrap">
-      <${Header} data=${data} uni=${uni} cur=${cur} onPick=${pick} onUnknown=${function (t) { pick(t); }}/>
-      <${InstallTip}/>
-      <${ModeSwitch} mode=${mode} setMode=${setMode}/>
-      <${AlertBanner} watch=${watch} data=${data} uni=${uni} onPick=${pick} jHits=${jHits} openTool=${openTool}/>
+    var nAlerts = jHits.length + watch.filter(function (w) { var q = quote(w.t, data, uni); var tg = w.alert || (q && q.entry); return q && tg && q.price <= tg; }).length;
+    var P = C.pillars(s, d, mkt1y);
+
+    var body;
+    if (screen === "home") body = html`<div>
+      ${profile ? null : html`<${Profile} setMode=${setMode} setProfile=${setProfile}/>`}
+      <${NextStep} data=${data} extras=${extras} go=${go}/>
       <${Morning} data=${data} uni=${uni} watch=${watch} port=${port} onPick=${pick}/>
-      <${Guide}/>
       <${Queue} db=${db}/>
-      ${unknown ? html`<${AiAnalysis} key=${"u-" + unknown} query=${unknown} db=${db} sample=${sample} onClose=${function () { setUnknown(null); }}/>` : null}
-      <div id="sec-main" style=${{ scrollMarginTop: 8 }}>
-      ${curT ? html`<${ActionBar} t=${curT} deep=${!!data.stocks[curT]} watch=${watch} port=${port} toggleWatch=${toggleWatch} openTool=${openTool} addCompare=${addCompare} onShare=${data.stocks[curT] ? function () { var S = data.stocks[curT], D2 = C.derive(S); shareCard(S, D2, C.pillars(S, D2, mkt1y)); } : null}/>` : null}
-      ${main}</div>
-      ${e(MyArea, Object.assign({}, my, { tab: myTab, setTab: setMyTab }))}
-      <${Compare} data=${data} sel=${sel} setSel=${setCmpSel} mkt1y=${mkt1y} onPick=${pick}/>
+    </div>`;
+    else if (screen === "stock") {
+      var main;
+      if (idx) main = html`<${IndexView} key=${idx.id} x=${idx} db=${db} sample=${sample}/>`;
+      else if (lite) main = html`<${LiteView} key=${lite[0]} row=${lite} uni=${uni} asOf=${uniAsOf} deep=${deep} db=${db} sample=${sample} onPick=${pick}/>`;
+      else {
+        var tabBody;
+        if (stab === "sum") tabBody = html`<div>
+          <${DecisionCard} s=${s} d=${d} mkt1y=${mkt1y}/>
+          <${Verdict} s=${s} d=${d}/>
+          <${Outlook} s=${s} d=${d}/></div>`;
+        else if (stab === "legends") tabBody = html`<${Legends} key=${"lg-" + cur} s=${s} d=${d} data=${data} mkt1y=${mkt1y} extras=${extras}/>`;
+        else if (stab === "chart") tabBody = html`<${PriceHistory} key=${"h-" + cur} s=${s} d=${d} hist=${data.history}/>`;
+        else if (stab === "fin") tabBody = simple ? html`<div className="card simple-more"><span>הדוחות הכספיים ל־5 שנים ומכפילי השוק מוצגים במצב "מתקדם".</span><button className="btn ghost" onClick=${function () { setMode("pro"); }}>עבור למתקדם</button></div>` : html`<div><${Hero} s=${s} d=${d} noJump=${true}/><${Fin} key=${"fin-" + cur} s=${s} d=${d}/></div>`;
+        else if (stab === "analysts") tabBody = html`<div><section className="card"><${FeaturedAnalysts} t=${s.ticker} extras=${extras}/></section><${Analysts} s=${s} d=${d}/></div>`;
+        else tabBody = html`<${AnalystTools} key=${"at-" + cur} s=${s} d=${d} data=${data} mode=${mode}/>`;
+        main = html`<div>
+          <${StockSummary} s=${s} d=${d} P=${P} onMore=${function () { setStab("sum"); scrollTo("sec-decision"); }}/>
+          <${StockTabs} tab=${stab} setTab=${setStab}/>
+          ${tabBody}
+          ${stab === "sum" ? html`<${Sources} s=${s} macro=${data.macro}/>` : null}</div>`;
+      }
+      body = html`<div>
+        ${unknown ? html`<${AiAnalysis} key=${"u-" + unknown} query=${unknown} db=${db} sample=${sample} onClose=${function () { setUnknown(null); }}/>` : null}
+        <div id="sec-main" style=${{ scrollMarginTop: 8 }}>
+        ${curT ? html`<${ActionBar} t=${curT} deep=${!!data.stocks[curT]} watch=${watch} port=${port} toggleWatch=${toggleWatch} openTool=${openTool} addCompare=${addCompare} onShare=${data.stocks[curT] ? function () { var S = data.stocks[curT], D2 = C.derive(S); shareCard(S, D2, C.pillars(S, D2, mkt1y)); } : null}/>` : null}
+        ${main}</div></div>`;
+    }
+    else if (screen === "mine") body = e(MyArea, Object.assign({}, my, { tab: myTab, setTab: setMyTab }));
+    else if (screen === "discover") body = html`<div>
       <${Screener} data=${data} mkt1y=${mkt1y} onPick=${pick}/>
+      <${Compare} data=${data} sel=${sel} setSel=${setCmpSel} mkt1y=${mkt1y} onPick=${pick}/>
       <${IndicesStrip} indices=${data.indices} cur=${cur} onPick=${pick}/>
       <${Categories} uni=${uni} deep=${deep} onPick=${pick}/>
       <${Markets} markets=${data.markets}/>
       <${Macro} macro=${data.macro}/>
       <${TrackRecord} data=${data} onPick=${pick}/>
+    </div>`;
+    else body = html`<div>
+      <${Academy} data=${data} extras=${extras}/>
+      <${TimeMachine} data=${data}/>
+      <${Compound}/>
+      <${IndexTruth} extras=${extras}/>
+      <${Crashes} extras=${extras}/>
+      <${Guide}/>
       <${Learn} s=${s} d=${d}/>
-      ${idx || lite ? null : html`<${Sources} s=${s} macro=${data.macro}/>`}
+      <${Glossary}/>
+      <${LearnMore} extras=${extras}/>
+    </div>`;
+
+    return html`<div className=${"wrap" + (big ? " big" : "")}>
+      <${NavBar} screen=${screen} go=${go} alerts=${nAlerts}/>
+      <${Header} data=${data} uni=${uni} cur=${cur} onPick=${pick} onUnknown=${function (t) { pick(t); }} compact=${screen !== "home"}/>
+      ${screen === "home" ? html`<${InstallTip}/>` : null}
+      <${TopTools} mode=${mode} setMode=${setMode} big=${big} setBig=${setBig}/>
+      ${screen === "home" || screen === "mine" ? html`<${AlertBanner} watch=${watch} data=${data} uni=${uni} onPick=${pick} jHits=${jHits} openTool=${openTool}/>` : null}
+      ${body}
       <footer className="foot">הדקה הכלכלית של שמש · מידע לימודי ומעקב בלבד, לא ייעוץ השקעות ולא תחליף לבעל רישיון. "96% דיוק" הוא שם המותג. כל מספר בדף מגיע עם מקור; טעויות יכולות לקרות – בדקו לפני החלטה.</footer>
-      <${BottomNav} openTool=${openTool} alerts=${jHits.length + watch.filter(function (w) { var q = quote(w.t, data, uni); var tg = w.alert || (q && q.entry); return q && tg && q.price <= tg; }).length}/>
     </div>`;
   }
 
