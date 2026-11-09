@@ -251,8 +251,8 @@
         </div>
         <div>
           <div className="pc">
-            <div className="col"><h3 className="up">3 סיבות להשקיע</h3><ol>${s.pros.map(function (x, i) { return html`<li key=${i}>${x}</li>`; })}</ol></div>
-            <div className="col risk"><h3 className="down">3 סיכונים שחובה להכיר</h3><ol>${s.risks.map(function (x, i) { return html`<li key=${i}>${x}</li>`; })}</ol></div>
+            <div className="col"><h3 className="up">${s.pros.length} סיבות להשקיע</h3><ol>${s.pros.map(function (x, i) { return html`<li key=${i}>${x}</li>`; })}</ol></div>
+            <div className="col risk"><h3 className="down">${s.risks.length} סיכונים שחובה להכיר</h3><ol>${s.risks.map(function (x, i) { return html`<li key=${i}>${x}</li>`; })}</ol></div>
           </div>
           <div className="news"><b style=${{ color: "var(--text)" }}>מה קרה לאחרונה</b>${s.news.map(function (x, i) { return html`<div key=${i}>• ${x}</div>`; })}</div>
           <details className="method"><summary>איך מחושב הציון וההמלצה?</summary>
