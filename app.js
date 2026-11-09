@@ -803,7 +803,7 @@
           <div className="row"><span className="px">${N(usd(x[5]))}</span><span className="muted">${N(mcap(x[7]))}</span></div></button>`; })}</div></section>` : null}
       <section className="card"><div className="sec-h"><div><div className="kicker">שקיפות</div><h2>מקורות לבדיקה עצמית</h2></div></div>
         <ol className="src-list">${links.map(function (l) { return html`<li key=${l[0]}><a href=${l[1]} target="_blank" rel="noopener">${l[0]} – ${T}</a></li>`; })}</ol>
-        <p className="method">המחיר, השינוי היומי, שווי השוק, הסקטור והענף מגיעים מסורק המניות של Nasdaq.com ומתעדכנים כל בוקר. בכל עדכון יומי נבנה ניתוח מלא (דוחות 5 שנים, 4 הבנקים, Morningstar, פסק דין ותחזית) ל־3 מניות נוספות לפי סדר גודל; מניה שביקשתם עוקפת את התור.</p></section>
+        <p className="method">המחיר, השינוי היומי, שווי השוק, הסקטור והענף מגיעים מסורק המניות של Nasdaq.com ומתעדכנים כל בוקר. בכל עדכון יומי נבנה ניתוח מלא (דוחות 5 שנים, 4 הבנקים, Morningstar, פסק דין ותחזית) ל־6 מניות נוספות לפי סדר גודל (קודם 100 הגדולות בשוק); מניה שביקשתם עוקפת את התור.</p></section>
     </div>`;
   }
 
@@ -1524,7 +1524,7 @@
     }).sort(function (a, b) { return sort === "score" ? b.d.score - a.d.score : sort === "upside" ? b.d.upside - a.d.upside : sort === "gap" ? a.gap - b.gap : b.g - a.g; });
     function set(k, v) { var n = Object.assign({}, f); n[k] = v; setF(n); }
     return html`<section className="card" id="sec-screener">
-      <div className="sec-h"><div><div className="kicker">סורק</div><h2>מצא מניות לפי הכללים שלך</h2></div><div className="hint">${data.order.length} מניות עם ניתוח מלא · אחרי כל יום מסחר נוספות עוד 3</div></div>
+      <div className="sec-h"><div><div className="kicker">סורק</div><h2>מצא מניות לפי הכללים שלך</h2></div><div className="hint">${data.order.length} מניות עם ניתוח מלא · אחרי כל יום מסחר נוספות עוד 6</div></div>
       <div className="scr-f">
         <label>רמזורים ירוקים לפחות<select value=${f.greens} onChange=${function (ev) { set("greens", +ev.target.value); }}>${[0, 2, 3, 4, 5, 6].map(function (n) { return html`<option key=${n} value=${n}>${n === 0 ? "הכול" : n + " מתוך 6"}</option>`; })}</select></label>
         <label>המלצת המודל<select value=${f.rec} onChange=${function (ev) { set("rec", ev.target.value); }}><option value="">הכול</option><option value="buy">קנייה או קנייה חזקה</option><option value="sb">קנייה חזקה</option><option value="hold">החזק</option><option value="sell">מכירה</option></select></label>
