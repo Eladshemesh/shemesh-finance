@@ -291,6 +291,35 @@
     return { text: q + g + v + r, risky: m.risk === "r" };
   }
 
-  root.ShemeshCalc = { derive: derive, cagr: cagr, mean: mean, pillars: pillars, reverseDCF: reverseDCF, peHistory: peHistory, sizing: sizing, stress: stress, lenses: lenses, verdictLine: verdictLine };
+  // ---------- index model (for indices without bank targets; SPX keeps its published-targets model) ----------
+  function idxAnalyze(x) {
+    var L = x.level; if (!L) return null;
+    var V = x.val, vol = x.vol || 18, lights = [];
+    var z = V && V.pe && V.avg10 && V.sd10 ? (V.pe - V.avg10) / V.sd10 : null;
+    lights.push({ key: "valuation", q: "המחיר ביחס להיסטוריה", light: z == null ? "n" : z <= -0.5 ? "g" : z <= 0.75 ? "y" : "r",
+      a: z == null ? "אין נתון היסטורי אמין למכפיל של המדד הזה." : "מכפיל רווח " + V.pe.toFixed(1) + " לעומת ממוצע 10 שנים של " + V.avg10.toFixed(1) + (z <= -0.5 ? " – זול מהרגיל." : z <= 0.75 ? " – בטווח הרגיל." : " – יקר מהרגיל.") });
+    var g5 = x.ret5y != null ? Math.pow(1 + x.ret5y / 100, 1 / 5) - 1 : null, gTxt = "ב־5 השנים האחרונות";
+    if (g5 == null) { var an = (x.annual || []).filter(function (a) { return a[1] != null; }).slice(-5); if (an.length >= 3) { g5 = Math.pow(an.reduce(function (m, a) { return m * (1 + a[1] / 100); }, 1), 1 / an.length) - 1; gTxt = "ב־" + an.length + " השנים המלאות האחרונות"; } }
+    lights.push({ key: "growth", q: "תשואה לאורך זמן", light: g5 == null ? "n" : g5 >= 0.08 ? "g" : g5 >= 0.04 ? "y" : "r",
+      a: g5 == null ? "אין עדיין נתון תשואה ארוכת טווח." : "בממוצע " + (g5 * 100).toFixed(1) + "% בשנה " + gTxt + "." });
+    var pos = x.hi52 && x.lo52 && x.hi52 > x.lo52 ? (L - x.lo52) / (x.hi52 - x.lo52) : null, dd = x.hi52 ? (L / x.hi52 - 1) * 100 : null;
+    lights.push({ key: "trend", q: "המגמה בשנה האחרונה", light: pos == null && x.ytd == null ? "n" : (x.ytd != null ? x.ytd >= 5 : pos >= 0.6) ? "g" : (x.ytd != null ? x.ytd >= -5 : pos >= 0.3) ? "y" : "r",
+      a: (x.ytd != null ? "מתחילת השנה " + (x.ytd >= 0 ? "+" : "") + x.ytd.toFixed(1) + "%. " : "") + (dd != null ? (dd > -1 ? "קרוב לשיא השנתי." : "נמוך ב־" + Math.abs(dd).toFixed(0) + "% מהשיא השנתי.") : "") || "אין נתון." });
+    lights.push({ key: "risk", q: "כמה תנודתי", light: vol <= 16 ? "g" : vol <= 21 ? "y" : "r",
+      a: "תנודתיות שנתית טיפוסית של כ־" + vol + "%" + (vol <= 16 ? " – יציב יחסית." : vol <= 21 ? " – בינונית." : " – תנודתי. שנה רעה יכולה להוריד הרבה.") });
+    var W = { valuation: 35, growth: 25, trend: 15, risk: 25 }, S = 0, T = 0;
+    lights.forEach(function (l) { if (l.light === "n") return; T += W[l.key]; S += W[l.key] * (l.light === "g" ? 1 : l.light === "y" ? 0.55 : 0.15); });
+    var known = lights.filter(function (l) { return l.light !== "n"; }).length;
+    var score = known >= 3 ? Math.round(S / T * 100) : null;
+    var g = Math.max(0, Math.min(0.10, g5 != null ? g5 : 0.06));
+    var revert = z != null ? Math.sqrt(V.avg10 / V.pe) : 1;
+    var fair = L * (1 + g) * revert, up = (fair / L - 1) * 100;
+    var rec = score == null ? null : up >= 15 && score >= 80 ? "sb" : up >= 7 && score >= 65 ? "buy" : up <= -12 ? "sell" : "hold";
+    var capped = false; if (z == null && (rec === "sb" || rec === "buy")) { rec = "hold"; capped = true; }
+    return { fair: Math.round(fair), entry: Math.round(fair * 0.8), up: up, score: score, rec: rec, capped: capped, lights: lights, known: known, g: g, revert: revert,
+      how: "שווי לשנה = רמת המדד × (1 + תשואה שנתית ממוצעת של 5 שנים, עד 10%)" + (z != null ? " × חזרה של חצי הדרך אל מכפיל הרווח הממוצע של 10 שנים" : "") + ". מחיר כניסה = שווי × 0.8 (מרווח ביטחון 20%). הציון משקלל: מחיר מול היסטוריה 35%, תשואה ארוכת טווח 25%, תנודתיות 25%, מגמה 15%." };
+  }
+
+  root.ShemeshCalc = { derive: derive, cagr: cagr, mean: mean, pillars: pillars, reverseDCF: reverseDCF, peHistory: peHistory, sizing: sizing, stress: stress, lenses: lenses, verdictLine: verdictLine, idxAnalyze: idxAnalyze };
   if (typeof module !== "undefined") module.exports = root.ShemeshCalc;
 })(typeof window !== "undefined" ? window : globalThis);

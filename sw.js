@@ -1,6 +1,6 @@
 // Offline support: data.json is network-first (always fresh when online),
 // everything else (page, scripts, fonts, icons) is cache-first.
-const CACHE = "shemesh-2026-11-09-r4";
+const CACHE = "shemesh-2026-11-09-r5";
 const CORE = ["./", "index.html", "app.js", "calc.js", "data.json", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", (e) => {

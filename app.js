@@ -28,7 +28,11 @@
     TA125: ["ta125", "ta-125", "תא 125", "תל אביב 125"],
     DAX: ["dax", "גרמניה", "דאקס"],
     FTSE: ["ftse", "uk", "לונדון", "פוטסי", "בריטניה"],
-    N225: ["nikkei", "ניקיי", "יפן", "japan"]
+    N225: ["nikkei", "ניקיי", "יפן", "japan"],
+    SOX: ["sox", "soxx", "smh", "שבבים", "מדד השבבים", "semiconductor", "semis"],
+    TA90: ["ta90", "ta-90", "תא 90", "תל אביב 90"],
+    TABANKS: ["בנקים", "תא בנקים", "banks", "בנקים 5"],
+    TARE: ["נדלן", "נדל\"ן", "תא נדלן", "real estate"]
   };
   var HE_ALIAS = {
     "אמזון": "AMZN", "גוגל": "GOOGL", "אלפבית": "GOOGL", "מטא": "META", "פייסבוק": "META", "טבע": "TEVA", "ספייס איקס": "SPCX", "ספייסאקס": "SPCX", "ספייס": "SPCX",
@@ -86,7 +90,8 @@
     var list = (D.featured || D.order).map(function (t) { return D.stocks[t]; }).filter(Boolean);
     var qq = q.trim().toLowerCase();
     var items = D.order.map(function (t) { var s = D.stocks[t]; return { key: s.ticker, label: s.nameHe + " · " + s.name, sub: s.ticker + " · ניתוח מלא", words: [s.ticker, s.name, s.nameHe] }; })
-      .concat((D.indices || []).map(function (x) { return { key: "IDX:" + x.id, label: x.nameHe + " · " + x.name, sub: "מדד", words: [x.id, x.name, x.nameHe].concat(IDX_ALIAS[x.id] || []) }; }));
+      .concat((D.indices || []).map(function (x) { return { key: "IDX:" + x.id, label: x.nameHe + " · " + x.name, sub: "מדד", words: [x.id, x.name, x.nameHe].concat(IDX_ALIAS[x.id] || []) }; }))
+      .concat([{ key: "FX:USD", label: "שער הדולר · USD/ILS", sub: "מטבע", words: ["דולר", "usd", "usdils", "שער הדולר", "dollar"] }, { key: "FX:EUR", label: "שער היורו · EUR/ILS", sub: "מטבע", words: ["יורו", "אירו", "eur", "eurils", "שער היורו", "euro"] }]);
     var qt = q.trim().toLowerCase().replace(/["'״׳]/g, "");
     var sugg = !qt ? [] : items.filter(function (it) { return it.words.some(function (w) { w = String(w).toLowerCase().replace(/["'״׳]/g, ""); return w.indexOf(qt) === 0 || (qt.length > 2 && w.indexOf(qt) >= 0); }); });
     if (qt && props.uni) {
@@ -553,6 +558,10 @@
     if (x.analysis) {
       b12 = x.analysis.fair; b6 = L + (b12 - L) / 2; b24 = b12 * (1 + Math.min(20, (x.analysis.eps27 / x.analysis.eps26 - 1) * 100) / 100);
       how = "בסיס לשנה = ממוצע יעדי גולדמן (8,700) ומורגן סטנלי (8,300), השווי הנגזר מ־Morningstar ורווח 2027 כפול המכפיל הממוצע של 10 שנים; שנתיים = צמיחת רווח של 15.6% במכפיל קבוע.";
+    } else if (C.idxAnalyze(x) && C.idxAnalyze(x).known >= 2) {
+      var M = C.idxAnalyze(x);
+      b12 = M.fair; b6 = L + (b12 - L) / 2; b24 = M.fair * (1 + M.g);
+      how = "בסיס לשנה = השווי לפי המודל (" + lvl(M.fair) + "); שנתיים = עוד שנה של התשואה הממוצעת (" + (M.g * 100).toFixed(1) + "%).";
     } else if (x.ret5y != null) {
       var g = Math.min(0.10, Math.pow(1 + x.ret5y / 100, 1 / 5) - 1);
       b6 = L * Math.pow(1 + g, 0.5); b12 = L * (1 + g); b24 = L * Math.pow(1 + g, 2);
@@ -563,18 +572,24 @@
   }
   function lvl(v) { return v == null ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: 2 }); }
 
+  var IREC = { sb: ["קנייה חזקה", "c-sb"], buy: ["קנייה", "c-b"], hold: ["החזק", "c-h"], sell: ["מכירה", "c-s"] };
   function IndicesStrip(props) {
     var list = props.indices || [];
     if (!list.length) return null;
     return html`<section className="card" id="sec-indices">
       <div className="sec-h"><div><div className="kicker">שווקים</div><h2>המדדים המובילים</h2></div><div className="hint">לחצו על מדד לניתוח מלא</div></div>
-      <div className="strip">${list.map(function (x) {
+      ${[["ארה\"ב", "וול סטריט"], ["ישראל", "תל אביב"], [null, "עולם"]].map(function (G) {
+        var sub = list.filter(function (x) { return G[0] ? x.region === G[0] : (x.region !== "ארה\"ב" && x.region !== "ישראל"); });
+        return sub.length ? html`<div key=${G[1]}><h3 className="idx-g">${G[1]}</h3><div className="strip">${sub.map(function (x) {
+        var M = C.idxAnalyze(x), R = x.analysis ? x.analysis.rec : M && M.rec;
         return html`<button key=${x.id} className=${"tick" + (props.cur === "IDX:" + x.id ? " on" : "")} onClick=${function () { props.onPick("IDX:" + x.id); }}>
           <div className="row"><span style=${{ fontWeight: 700, fontSize: 14 }}>${x.nameHe}</span><span className="muted" style=${{ fontSize: 11 }}>${x.region}</span></div>
           <div className="row"><span className="px">${N(lvl(x.level))}</span>${N(pct(x.chg, 2, true), cls(x.chg))}</div>
           <div className="row" style=${{ fontSize: 12 }}><span className="muted">מתחילת השנה</span>${x.ytd != null ? N(pct(x.ytd, 1, true), cls(x.ytd)) : html`<span className="muted">—</span>`}</div>
+          ${R ? html`<div className="row"><span className=${"pill " + IREC[R][1]}>${IREC[R][0]}</span></div>` : null}
         </button>`;
-      })}</div>
+      })}</div></div>` : null; })}
+      <${FxCards} fx=${props.fx} onPick=${props.onPick}/>
     </section>`;
   }
 
@@ -590,6 +605,7 @@
       { l: "איך משקיעים", v: x.etf, small: true }
     ];
     var REC = { sb: ["קנייה חזקה", "c-sb"], buy: ["קנייה", "c-b"], hold: ["החזק", "c-h"], sell: ["מכירה", "c-s"] };
+    var M = C.idxAnalyze(x);
     var ann = (x.annual || []).filter(function (a) { return a[1] != null; }).map(function (a) { return { label: a[0], r: a[1] }; });
     var chartO = null, chartA = null;
     if (RC && o) {
@@ -622,6 +638,7 @@
             <div className="muted" style=${{ fontSize: 13.5 }}>${x.desc}</div>
             <div className="price">${N(lvl(x.level))}</div>
             <div className="muted" style=${{ fontSize: 13 }}>נעילה ${dt(x.date)}</div>
+            ${!A && M && M.rec ? html`<div style=${{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}><span className=${"pill " + REC[M.rec][1]}>${REC[M.rec][0]}</span><span className="pill" style=${{ color: "#8BB6FF" }}>ציון ${M.score}/100</span><span className=${"pill " + (M.up >= 0 ? "c-b" : "c-s")}>פוטנציאל ${N(pct(M.up, 1, true))}</span></div>` : null}
             ${A ? html`<div style=${{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}><span className=${"pill " + REC[A.rec][1]}>${REC[A.rec][0]}</span><span className="pill" style=${{ color: "#8BB6FF" }}>ציון ${A.score}/100</span><span className="pill c-b">פוטנציאל ${N(pct((A.fair / x.level - 1) * 100, 1, true))}</span></div>` : null}
           </div>
           <div className="kpis">${kp.map(function (k, i) { return html`<div className="kpi" key=${i}><div className="l">${k.l}</div><div className=${"v " + (k.c || "")} style=${k.small ? { fontSize: 14 } : null}>${k.small ? k.v : N(k.v)}</div></div>`; })}</div>
@@ -643,6 +660,7 @@
           </div>
         </div>
       </section>` : null}
+      ${M ? e(IdxModel, { x: x, M: M, A: A }) : null}
       <section className="card">
         <div className="sec-h"><div><div className="kicker">צפי</div><h2>חצי שנה, שנה, שנתיים</h2></div></div>
         ${o ? html`<div className="ol-grid"><div className="chart">${chartO || html`<${NoCharts}/>`}</div>
@@ -2072,6 +2090,125 @@
       <button className="btn" onClick=${function () { props.go(step[2]); }}>${step[0]}</button></section>`;
   }
 
+  // ================= round 5: index model card, currencies =================
+  function IdxModel(props) {
+    var x = props.x, M = props.M, A = props.A;
+    var VC = { g: "var(--green)", y: "var(--amber)", r: "var(--red)", n: "var(--muted)" };
+    var W = { g: "חיובי", y: "בינוני", r: "שלילי", n: "אין נתון" };
+    return html`<section className="card">
+      <div className="sec-h"><div><div className="kicker">${A ? "בדיקה נוספת" : "פסק הדין"}</div><h2>${A ? "ארבע השאלות על " + x.nameHe : "האם כדאי להשקיע ב" + x.nameHe + "?"}</h2></div></div>
+      ${!A ? (M.rec ? html`<div className="verdict"><div className="rec">
+          <div className=${"tag " + IREC[M.rec][1]}>${IREC[M.rec][0]}</div>
+          <div className="entry"><div className="muted" style=${{ fontSize: 12.5 }}>רמת כניסה (מרווח ביטחון 20%)</div><div style=${{ fontSize: 26, fontWeight: 800 }}>${N(lvl(M.entry))}</div></div>
+          <div className="muted" style=${{ fontSize: 12.5 }}>שווי לשנה לפי המודל: ${N(lvl(M.fair))} (${pct(M.up, 1, true)} מהרמה היום) · ציון ${M.score}/100</div>
+          ${M.capped ? html`<p className="note-warn" style=${{ marginTop: 8 }}>אין לנו נתון אמין למכפיל הרווח של המדד הזה מול ההיסטוריה שלו, ולכן לא נמליץ על קנייה רק בגלל תשואות עבר.</p>` : null}
+        </div></div>` : html`<p className="note-warn">אין עדיין מספיק נתונים למדד הזה כדי לתת פסק דין (צריך לפחות 3 מתוך 4 הבדיקות). הנתונים יתווספו בעדכון היומי.</p>`) : null}
+      <div className="six" style=${{ marginTop: 12 }}>${M.lights.map(function (l) {
+        return html`<div key=${l.key} className="six-r" style=${{ gridTemplateColumns: "14px 1fr auto" }}><span className="light" style=${{ background: VC[l.light] }} aria-hidden="true"></span><span><b>${l.q}</b><br/><span className="muted" style=${{ fontSize: 13.5 }}>${l.a}</span></span><b style=${{ color: VC[l.light] }}>${W[l.light]}</b></div>`;
+      })}</div>
+      <div className="ours" style=${{ marginTop: 14 }}>
+        <div className="kicker" style=${{ color: "var(--gold)" }}>מה היו אומרים הגדולים</div>
+        <p style=${{ margin: "6px 0 0", fontSize: 14.5, lineHeight: 1.6 }}><b>וורן באפט</b> כתב שלרוב האנשים עדיף לקנות קרן מדד זולה ולהחזיק אותה שנים, במקום לבחור מניות. <b>הווארד מרקס</b> מזכיר שגם במדד המחיר חשוב: ${M.lights[0].light === "r" ? "כרגע המכפיל גבוה מהרגיל – עדיף להיכנס בהדרגה." : M.lights[0].light === "g" ? "כרגע המכפיל נמוך מהרגיל – תקופה נוחה יחסית להיכנס." : M.lights[0].light === "y" ? "כרגע המכפיל בטווח הרגיל." : "למדד הזה אין לנו נתון מכפיל, אז כדאי להיכנס בהדרגה."} <span className="muted">(לפי העקרונות שפרסמו, לא דעה שלהם על המדד הזה)</span></p>
+      </div>
+      <p className="method">${M.how}${x.val ? " מכפיל: " + x.val.note + ", נכון ל־" + dt(x.val.asOf) + "." : ""} זה מודל פשוט ושקוף לצורכי לימוד – לא ייעוץ השקעות.</p>
+    </section>`;
+  }
+
+  var FXK = {
+    USD: { pair: "דולר/שקל", name: "שער הדולר", sym: "$", key: "usd", flag: "🇺🇸",
+      up: ["טיסות, קניות באינטרנט ומוצרים מיובאים (דלק, אלקטרוניקה, רכבים) מתייקרים.", "זה יכול להעלות את האינפלציה בישראל, ולכן בנק ישראל ייטה לא להוריד ריבית.", "טוב ליצואנים ולחברות הייטק שמוכרות בדולרים – הן מקבלות יותר שקלים.", "מי שמחזיק מניות בוול סטריט מרוויח: התיק שווה יותר שקלים."],
+      down: ["חו״ל ומוצרים מיובאים זולים יותר, וזה עוזר להוריד את האינפלציה.", "לבנק ישראל קל יותר להוריד ריבית – משכנתאות והלוואות יכולות להוזיל.", "קשה יותר ליצואנים: אותו דולר שווה פחות שקלים.", "מי שמחזיק מניות אמריקאיות מרוויח פחות בשקלים – גם אם המניה עלתה."],
+      move: ["פער הריביות בין בנק ישראל לפד האמריקאי.", "המצב הביטחוני והפוליטי – אי־ודאות מחלישה את השקל.", "השקעות של זרים בישראל, בעיקר בהייטק.", "גופים מוסדיים: כשוול סטריט עולה הם מוכרים דולרים כדי לגדר – והשקל מתחזק.", "התערבות של בנק ישראל (רכישת או מכירת דולרים)."] },
+    EUR: { pair: "יורו/שקל", name: "שער היורו", sym: "€", key: "eur", flag: "🇪🇺",
+      up: ["חופשה באירופה ומוצרים מאירופה (רכבים, מזון, ביגוד) מתייקרים.", "טוב לחברות ישראליות שמוכרות לאירופה.", "מי שמחזיק השקעות באירופה (למשל מדד הדאקס) מרוויח יותר בשקלים."],
+      down: ["טיסות וחופשות באירופה זולות יותר.", "מוצרים מאירופה זולים יותר.", "השקעות באירופה שוות פחות שקלים."],
+      move: ["שער היורו מול הדולר: היורו/שקל ≈ היורו/דולר × הדולר/שקל.", "הריבית של הבנק המרכזי האירופי לעומת בנק ישראל.", "הכלכלה באירופה (גרמניה במיוחד) – צמיחה, אנרגיה, מלחמה באוקראינה.", "אותם גורמים ישראליים שמזיזים את השקל מול הדולר."] }
+  };
+  function fxStats(fx, k) {
+    var mon = k === "USD" ? fx.monthly : fx.eur && fx.eur.monthly; if (!mon) return null;
+    var ks = Object.keys(mon).sort(), last = ks[ks.length - 1];
+    var rep = fx.rep ? fx.rep[FXK[k].key] : null, now = rep || (k === "USD" ? fx.now : mon[last]);
+    var cm = String(rep ? fx.rep.date : last).slice(0, 7), Y = +cm.slice(0, 4), Mo = +cm.slice(5, 7);
+    function back(n) { var t = (Y * 12 + Mo - 1) - n, k2 = Math.floor(t / 12) + "-" + ("0" + (t % 12 + 1)).slice(-2); return mon[k2] || null; }
+    var y1 = back(12), y5 = back(60), m1 = back(1), lastY = ks.slice(-12).map(function (x) { return mon[x]; });
+    return { now: now, date: rep ? fx.rep.date : (k === "USD" ? fx.asOf : last), ks: ks, mon: mon,
+      c1: m1 ? (now / m1 - 1) * 100 : null, c12: y1 ? (now / y1 - 1) * 100 : null, c5: y5 ? (now / y5 - 1) * 100 : null,
+      lo: Math.min.apply(null, lastY), hi: Math.max.apply(null, lastY), avg5: ks.slice(-60).reduce(function (a, x) { return a + mon[x]; }, 0) / Math.min(60, ks.length) };
+  }
+  function FxCards(props) {
+    var fx = props.fx; if (!fx) return null;
+    return html`<div><h3 className="idx-g">מטבעות</h3><div className="strip">${["USD", "EUR"].map(function (k) {
+      var S = fxStats(fx, k); if (!S) return null;
+      return html`<button key=${k} className="tick" onClick=${function () { props.onPick("FX:" + k); }}>
+        <div className="row"><span style=${{ fontWeight: 700, fontSize: 14 }}>${FXK[k].name}</span><span className="muted" style=${{ fontSize: 11 }}>${FXK[k].pair}</span></div>
+        <div className="row"><span className="px">${N("₪" + S.now.toFixed(3))}</span>${S.c1 != null ? N(pct(S.c1, 1, true), "") : null}</div>
+        <div className="row" style=${{ fontSize: 12 }}><span className="muted">מול לפני שנה</span>${S.c12 != null ? N(pct(S.c12, 1, true)) : "—"}</div>
+        <div className="row"><span className="muted" style=${{ fontSize: 12 }}>מה זה אומר? ←</span></div>
+      </button>`;
+    })}</div></div>`;
+  }
+  function CurrencyView(props) {
+    var k = props.k, fx = props.fx, K = FXK[k], S = fxStats(fx, k);
+    var _a = useState(10000), amt = _a[0], setAmt = _a[1];
+    if (!S) return html`<section className="card"><p className="muted">אין נתונים.</p></section>`;
+    var rows = S.ks.slice(-60).map(function (m) { return { label: lbl(m), v: S.mon[m] }; });
+    var chart = RC ? e(RC.ResponsiveContainer, { width: "100%", height: 240 }, e(RC.LineChart, { data: rows, margin: { top: 10, right: 10, left: 4, bottom: 0 } },
+      e(RC.CartesianGrid, { stroke: "#24314F", strokeDasharray: "3 4", vertical: false }),
+      e(RC.XAxis, { dataKey: "label", tick: AX, stroke: "#24314F", reversed: true, interval: 11 }),
+      e(RC.YAxis, { tick: AX, stroke: "#24314F", orientation: "right", width: 46, domain: ["auto", "auto"], tickFormatter: function (v) { return v.toFixed(2); } }),
+      e(RC.Tooltip, { content: function (pp) { return e(TT, Object.assign({}, pp, { fmt: { v: function (v) { return "₪" + v.toFixed(3); } } })); } }),
+      e(RC.ReferenceLine, { y: S.avg5, stroke: "#93A0B8", strokeDasharray: "4 4" }),
+      e(RC.Line, { dataKey: "v", name: K.name, stroke: "#E9B949", strokeWidth: 2.5, dot: false, isAnimationActive: false }))) : null;
+    var vsAvg = (S.now / S.avg5 - 1) * 100;
+    var exUp = amt * S.now * 0.05, ratio = fx.rep && fx.rep.usd && fx.rep.eur ? fx.rep.eur / fx.rep.usd : null;
+    return html`<div>
+      <section className="card"><div className="hero"><div>
+        <div className="kicker">מטבע · ${K.pair}</div>
+        <div className="nm"><h2>${K.name}</h2></div>
+        <div className="price">${N("₪" + S.now.toFixed(4))}</div>
+        <div className="muted" style=${{ fontSize: 13 }}>${fx.rep ? "השער היציג של בנק ישראל, " : ""}${dt(S.date)}</div>
+        <p style=${{ marginTop: 10, fontSize: 16, lineHeight: 1.6 }}>${K.sym === "$" ? "דולר אחד" : "יורו אחד"} עולה היום ${N("₪" + S.now.toFixed(2))}. זה ${vsAvg >= 0 ? "גבוה" : "נמוך"} ב־${pct(Math.abs(vsAvg), 1)} מהממוצע של 5 השנים האחרונות (₪${S.avg5.toFixed(2)}) – כלומר ה${K.sym === "$" ? "דולר" : "יורו"} ${Math.abs(vsAvg) < 3 ? "בערך במחיר הרגיל שלו" : vsAvg >= 0 ? "יקר יחסית, והשקל חלש" : "זול יחסית, והשקל חזק"}.</p>
+      </div>
+      <div className="kpis">
+        <div className="kpi"><div className="l">לעומת לפני חודש</div><div className=${"v"}>${N(pct(S.c1, 1, true))}</div><div className="s">מול ממוצע החודש הקודם</div></div>
+        <div className="kpi"><div className="l">לעומת לפני שנה</div><div className="v">${N(pct(S.c12, 1, true))}</div></div>
+        <div className="kpi"><div className="l">לעומת לפני 5 שנים</div><div className="v">${N(pct(S.c5, 1, true))}</div></div>
+        <div className="kpi"><div className="l">טווח 12 חודשים</div><div className="v">${N(S.lo.toFixed(2) + "–" + S.hi.toFixed(2))}</div><div className="s">ממוצעים חודשיים</div></div>
+        ${ratio ? html`<div className="kpi"><div className="l">יורו מול דולר</div><div className="v">${N(ratio.toFixed(3))}</div><div className="s">יורו אחד = כמה דולרים</div></div>` : null}
+      </div></div></section>
+      <section className="card"><div className="sec-h"><div><div className="kicker">5 שנים</div><h2>הממוצע החודשי של ${K.name}</h2></div><div className="hint">הקו המקווקו: ממוצע 5 שנים</div></div>
+        <div className="chart">${chart || html`<${NoCharts}/>`}</div></section>
+      <section className="card"><div className="sec-h"><div><div className="kicker">הסבר</div><h2>מה זה אומר כש${K.sym === "$" ? "הדולר" : "היורו"} עולה או יורד?</h2></div></div>
+        <div className="pc">
+          <div className="col"><h3 className="up">כש${K.sym === "$" ? "הדולר" : "היורו"} עולה (השקל נחלש)</h3><ul>${K.up.map(function (t, i) { return html`<li key=${i}>${t}</li>`; })}</ul></div>
+          <div className="col risk"><h3 className="down">כש${K.sym === "$" ? "הדולר" : "היורו"} יורד (השקל מתחזק)</h3><ul>${K.down.map(function (t, i) { return html`<li key=${i}>${t}</li>`; })}</ul></div>
+        </div>
+        <h3 style=${{ marginTop: 16 }}>מה מזיז את השער?</h3>
+        <ul className="opts">${K.move.map(function (t, i) { return html`<li key=${i}>${t}</li>`; })}</ul>
+      </section>
+      <section className="card"><div className="sec-h"><div><div className="kicker">דוגמה</div><h2>מה זה עושה להשקעה שלך</h2></div></div>
+        <div className="tk-in"><label htmlFor="fxamt" className="muted">יש לך השקעה של</label><input id="fxamt" className="num-in" type="number" min="0" step="1000" value=${amt} onInput=${function (ev) { setAmt(Math.max(0, +ev.target.value || 0)); }}/><span>${K.sym}</span></div>
+        <p style=${{ fontSize: 15.5, lineHeight: 1.7 }}>היום היא שווה ${N("₪" + Math.round(amt * S.now).toLocaleString("en-US"))}. אם ה${K.sym === "$" ? "דולר" : "יורו"} יעלה ב־5%, היא תהיה שווה ${N("₪" + Math.round(amt * S.now * 1.05).toLocaleString("en-US"))} (+₪${Math.round(exUp).toLocaleString("en-US")}) – בלי שההשקעה עצמה זזה. אם הוא ירד ב־5%, תפסיד ₪${Math.round(exUp).toLocaleString("en-US")} באותה דרך.</p>
+        <p className="muted" style=${{ fontSize: 13.5 }}>לכן מי שמשקיע בחו״ל מרוויח (או מפסיד) פעמיים: מהמניה ומהמטבע. בלשונית "התיק שלי" ובתיק הניסיוני אפשר לראות את התיק גם בשקלים.</p>
+      </section>
+      <p className="method">שער נוכחי: השער היציג של בנק ישראל. גרף ושינויים: ממוצעים חודשיים מ־x-rates.com. אין לנו תחזית לשער – אף אחד לא יודע לחזות מטבעות באופן עקבי. מידע לימודי, לא ייעוץ.</p>
+      <section className="card"><div className="sec-h"><div><div className="kicker">שקיפות</div><h2>מקורות</h2></div></div><ol className="src-list">
+        ${fx.rep ? html`<li><a href=${fx.rep.src} target="_blank" rel="noopener">בנק ישראל – שערי חליפין יציגים</a></li>` : null}
+        <li><a href=${k === "USD" ? fx.src : fx.eur.src} target="_blank" rel="noopener">x-rates – ממוצעים חודשיים ${K.pair}</a></li></ol></section>
+    </div>`;
+  }
+  var HOME_IDX = ["SPX", "NDX", "TA35", "TA125"];
+  function MarketBar(props) {
+    var data = props.data, fx = data.fx;
+    var items = HOME_IDX.map(function (id) { return (data.indices || []).find(function (x) { return x.id === id; }); }).filter(Boolean);
+    return html`<section className="card mbar" aria-label="מדדים ומטבעות">
+      <div className="sec-h" style=${{ marginBottom: 8 }}><div><div className="kicker">השווקים היום</div></div><button className="lnk" onClick=${props.onAll}>כל המדדים ←</button></div>
+      <div className="mbar-row">${items.map(function (x) {
+        return html`<button key=${x.id} onClick=${function () { props.onPick("IDX:" + x.id); }}><span className="muted">${x.nameHe}</span><b className="num">${lvl(Math.round(x.level))}</b>${N(pct(x.chg, 1, true), cls(x.chg))}</button>`;
+      })}${["USD", "EUR"].map(function (k) { var S = fx && fxStats(fx, k); return S ? html`<button key=${k} onClick=${function () { props.onPick("FX:" + k); }}><span className="muted">${FXK[k].name}</span><b className="num">₪${S.now.toFixed(3)}</b><span className="muted" style=${{ fontSize: 12 }}>מה זה אומר?</span></button>` : null; })}</div>
+    </section>`;
+  }
+
   // ---------- app ----------
   function App() {
     var _d = useState(null), data = _d[0], setData = _d[1];
@@ -2144,14 +2281,14 @@
     function pick(t) {
       setUnknown(null);
       var key = t;
-      if (t.indexOf("IDX:") !== 0) {
+      if (t.indexOf("IDX:") !== 0 && t.indexOf("FX:") !== 0) {
         var T = t.toUpperCase();
         if (data.stocks[T]) key = T;
         else if (uni && uni.map[T]) key = "L:" + T;
         else { setUnknown(t); setScreen("stock"); return; }
       }
       setCur(key); setStab("sum"); setScreen("stock");
-      try { history.replaceState(null, "", "#" + key.replace("IDX:", "").replace("L:", "").toLowerCase()); } catch (x) { }
+      try { history.replaceState(null, "", "#" + key.replace("IDX:", "").replace("L:", "").replace("FX:", "").toLowerCase()); } catch (x) { }
       try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch (x) { }
     }
     function scrollTo(id) { setTimeout(function () { var el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }, 60); }
@@ -2160,7 +2297,8 @@
     if (!data || !cur) return html`<div className="wrap"><div className="state">טוען את הדשבורד…</div></div>`;
     var idx = cur.indexOf("IDX:") === 0 ? (data.indices || []).find(function (x) { return "IDX:" + x.id === cur; }) : null;
     var lite = cur.indexOf("L:") === 0 && uni ? uni.map[cur.slice(2)] : null;
-    var s = idx || lite ? data.stocks[data.order[0]] : data.stocks[cur];
+    var fxk = cur.indexOf("FX:") === 0 ? cur.slice(3) : null;
+    var s = idx || lite || fxk ? data.stocks[data.order[0]] : data.stocks[cur];
     var d = C.derive(s);
     var deep = {}; data.order.forEach(function (t) { deep[t] = 1; });
     var spxI = (data.indices || []).find(function (x) { return x.id === "SPX"; });
@@ -2172,7 +2310,7 @@
     function addCompare(t) { var n = sel.indexOf(t) >= 0 ? sel : (sel.length >= 3 ? sel.slice(0, 2).concat([t]) : sel.concat([t])); setCmpSel(n); setScreen("discover"); scrollTo("sec-compare"); }
     function go(scr) { if (scr === "paper") return openTool("paper"); setScreen(scr); }
     function goLearn(id) { setScreen("learn"); scrollTo(id === "crash" ? "sec-crash" : "sec-" + id); }
-    var curT = idx ? null : lite ? lite[0] : cur;
+    var curT = idx || fxk ? null : lite ? lite[0] : cur;
     var my = { data: data, uni: uni, watch: watch, setWatch: setWatch, port: port, setPort: setPort, onPick: pick, preset: portPreset, journal: journal, setJournal: setJournal, mkt1y: mkt1y, goLearn: goLearn };
     var simple = mode === "simple";
     var jHits = journalHits(journal, data, uni);
@@ -2182,13 +2320,15 @@
     var body;
     if (screen === "home") body = html`<div>
       ${profile ? null : html`<${Profile} setMode=${setMode} setProfile=${setProfile}/>`}
+      <${MarketBar} data=${data} onPick=${pick} onAll=${function () { setScreen("discover"); scrollTo("sec-indices"); }}/>
       <${NextStep} data=${data} extras=${extras} go=${go}/>
       <${Morning} data=${data} uni=${uni} watch=${watch} port=${port} onPick=${pick}/>
       <${Queue} db=${db}/>
     </div>`;
     else if (screen === "stock") {
       var main;
-      if (idx) main = html`<${IndexView} key=${idx.id} x=${idx} db=${db} sample=${sample}/>`;
+      if (fxk) main = html`<${CurrencyView} key=${fxk} k=${fxk} fx=${data.fx}/>`;
+      else if (idx) main = html`<${IndexView} key=${idx.id} x=${idx} db=${db} sample=${sample}/>`;
       else if (lite) main = html`<${LiteView} key=${lite[0]} row=${lite} uni=${uni} asOf=${uniAsOf} deep=${deep} db=${db} sample=${sample} onPick=${pick}/>`;
       else {
         var tabBody;
@@ -2215,9 +2355,9 @@
     }
     else if (screen === "mine") body = e(MyArea, Object.assign({}, my, { tab: myTab, setTab: setMyTab }));
     else if (screen === "discover") body = html`<div>
+      <${IndicesStrip} indices=${data.indices} fx=${data.fx} cur=${cur} onPick=${pick}/>
       <${Screener} data=${data} mkt1y=${mkt1y} onPick=${pick}/>
       <${Compare} data=${data} sel=${sel} setSel=${setCmpSel} mkt1y=${mkt1y} onPick=${pick}/>
-      <${IndicesStrip} indices=${data.indices} cur=${cur} onPick=${pick}/>
       <${Categories} uni=${uni} deep=${deep} onPick=${pick}/>
       <${Markets} markets=${data.markets}/>
       <${Macro} macro=${data.macro}/>
