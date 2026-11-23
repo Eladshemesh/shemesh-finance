@@ -1,5 +1,5 @@
 {
- "asOf": "2026-11-16",
+ "asOf": "2026-11-23",
  "analysts": {
   "shannon": {
    "name": "ריצ׳רד שאנון",
@@ -63,6 +63,16 @@
     "rating": "Buy",
     "he": "קנייה",
     "target": 60,
+    "date": "2026-10-15",
+    "src": "https://stockanalysis.com/analysts/gerard-cassidy/"
+   }
+  ],
+  "MS": [
+   {
+    "a": "cassidy",
+    "rating": "Hold",
+    "he": "החזק",
+    "target": 195,
     "date": "2026-10-15",
     "src": "https://stockanalysis.com/analysts/gerard-cassidy/"
    }
